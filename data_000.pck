@@ -1,0 +1,17 @@
+ccopy_reg
+_reconstructor
+p0
+(cpickletest
+A
+p1
+c__builtin__
+object
+p2
+Ntp3
+Rp4
+(dp5
+S'name'
+p6
+S'data_000'
+p7
+sb.

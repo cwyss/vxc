@@ -1,0 +1,3 @@
+to build the python module pyrawmidi 
+
+$ python setup.py build
