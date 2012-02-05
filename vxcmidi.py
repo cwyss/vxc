@@ -48,6 +48,39 @@ def ctrlIndex(ctrlid):
 
 
 
+class ChunkError(Exception):
+    def __init__(self):
+        Exception.__init__(self)
+
+def writeChunk(file, name, data):
+    file.write(name[0:4])
+    length = len(data)%2**16
+    file.write(chr(length/256)+chr(length%256))
+    file.write(data[0:length])
+
+def readChunk(file):
+    buf = file.read(6)
+    if buf=='':
+        raise EOFError
+    elif len(buf)<6:
+        raise ChunkError
+    name = buf[0:4]
+    length = ord(buf[4])*256 + ord(buf[5])
+    data = file.read(length)
+    if len(data)<length:
+        raise ChunkError
+    return (name,data)
+
+def chunkMakeStr(string):
+    strlen = len(string) & 0xFF
+    return chr(strlen)+string[:strlen]
+
+def chunkGetStr(data):
+    strlen = ord(data[0])
+    return data[1:strlen+1]
+
+
+
 class SingleProg(object):
     SINGLENAME_START = ctrlIndex((CTRL_B, 112))
     SINGLENAME_END   = ctrlIndex((CTRL_B, 122))
@@ -64,7 +97,7 @@ class SingleProg(object):
         return dump
 
     def __init__(self, dump=None):
-        if dump!=None:
+        if dump!=None and len(dump)==DUMP_LENGTH:
             self.dump = dump
         else:
             self.dump = self.voidDump()
@@ -92,14 +125,15 @@ class SingleProg(object):
         ind = ctrlIndex(ctrlid)
         self.dump[ind] = value
 
-    def dumpToFile(self, file):
+    def makeChunk(self):
+        data = ''
         for d in self.dump:
-            file.write(chr(d))
+            data += chr(d)
+        return data
 
     @classmethod
-    def readFromFile(cls, file, dumplen=DUMP_LENGTH):
-        str = file.read(dumplen)
-        dump = [ord(c) for c in str]
+    def fromChunk(cls, data):
+        dump = [ord(c) for c in data]
         return SingleProg(dump)
 
     def copy(self):
@@ -111,28 +145,23 @@ class SingleBank(object):
         self.name = name
         self.progs = []
 
-    def dumpToFile(self, file):
-        pickle.dump((self.name,len(self.progs)), file)
-        for p in self.progs:
-            p.dumpToFile(file)
+    def makeChunk(self):
+        return chunkMakeStr(self.name)
 
     @classmethod
-    def loadFromFile(cls, file):
-#        print "load single banks"
-        name, numprogs = pickle.load(file)
-#        print name, numprogs
-        bank = SingleBank(name)
-        for i in range(numprogs):
-            bank.progs.append(SingleProg.readFromFile(file))
-#            print "new prog ", bank.progs[-1].makeName()
-        return bank
+    def fromChunk(cls, data):
+        return SingleBank(chunkGetStr(data))
 
 
 PROGLIB_VERSION_1  = 1
 
-PL_NEWLIB  = 0
-PL_NEWBANK = 1
-PL_NEWPROG = 2
+PL_LIBCHNG  = 0
+PL_NEWBANK  = 1
+PL_BANKCHNG = 2
+
+PL_DUMPCONT = 0
+PL_DUMPCHK  = 1
+PL_DUMPADD  = 2
 
 LIMIT_AND = 0
 LIMIT_OR = 1
@@ -140,6 +169,17 @@ LIMIT_OR = 1
 LIMIT_EQ = 0
 LIMIT_GE = 1
 LIMIT_LE = 2
+
+class ProgLibError(Exception):
+    def __init__(self, filename, 
+                 description="Not a valid program library"):
+        Exception.__init__(self)
+        self.filename = filename
+        self.description = description
+
+    def __str__(self):
+        return  self.description+': '+self.filename
+
 
 class ProgLibrary(object):
     def __init__(self, progChange, libChange):
@@ -174,7 +214,7 @@ class ProgLibrary(object):
         self.updateVisible()
         if self.current_bank>=len(self.visible):
             self.current_bank = 0
-        self.libChange(PL_NEWLIB)
+        self.libChange(PL_LIBCHNG)
 
     def matchProg(self, prog):
         b1 = True
@@ -233,7 +273,7 @@ class ProgLibrary(object):
         bank = self.banks[bi]
         contents = []
         for pi in bv:
-            contents.append((bank.progs[pi].name, 0))
+            contents.append((bank.progs[pi].name, pi))
         return contents
 
     def getProg(self, progind, bankind):
@@ -291,21 +331,41 @@ class ProgLibrary(object):
 
     def saveToFile(self, filename):
         f = open(filename, 'w')
-        pickle.dump((self.version, len(self.banks)), f)
+        writeChunk(f, 'PLIB', chr(self.version))
         for b in self.banks:
-            b.dumpToFile(f)
+            writeChunk(f, 'BANK', b.makeChunk())
+            for p in b.progs:
+                writeChunk(f, 'PROG', p.makeChunk())
         f.close()
 
     def loadFromFile(self, filename):
-        f = open(filename, 'r')
-        self.banks = []
-        self.version, numbanks = pickle.load(f)
-#        print self.version, numbanks
-        for i in range(numbanks):
-            self.banks.append(SingleBank.loadFromFile(f))
-        f.close()
+        newbanks = []
+        bank = None
+        try:
+            f = open(filename, 'r')
+            (chnk,data) = readChunk(f)
+            if chnk!='PLIB' or len(data)==0:
+                raise ProgLibError(filename)
+            # version = ord(data[0])
+            while True:
+                try:
+                    (chnk,data) = readChunk(f)
+                except EOFError:
+                    break
+                if chnk=='BANK':
+                    bank = SingleBank.fromChunk(data)
+                    newbanks.append(bank)
+                elif chnk=='PROG':
+                    if bank:
+                        bank.progs.append(SingleProg.fromChunk(data))
+                    else:
+                        raise ProgLibError(filename)
+            f.close()
+        except (EOFError, ChunkError):
+            raise ProgLibError(filename)
+        self.banks = newbanks
         self.updateVisible()
-        self.libChange(PL_NEWLIB)
+        self.libChange(PL_LIBCHNG)
         self.setProg(0,0)
 
     def newBank(self, name):
@@ -320,16 +380,53 @@ class ProgLibrary(object):
         if bankind<len(self.visible):
             del self.banks[self.visible[bankind][0]]
         self.updateVisible()
-        self.libChange(PL_NEWLIB)
+        self.libChange(PL_LIBCHNG)
 
-    def appendProg(self, midimsg):
-        bi = self.len(banks)-1
+    def bankDumpInit(self, name, banknr):
+        self.newBank(name)
+        self.bankdumpnr = banknr
+        self.bankdumpbi = len(self.banks)-1
+        self.bankdumpmiss = []
+
+    def bankDumpAddProg(self, midimsg):
+        bi = self.bankdumpbi
         bank = self.banks[bi]
+        if self.bankdumpnr!=midimsg.getBankNr():
+            return PL_DUMPCONT
+        prognr = midimsg.getProgNr()
         prog = SingleProg(midimsg.getSingleDump())
-        bank.progs.append(prog)
-        if self.nolimit:
-            self.appendVisible(bi)
-            self.libChange(PL_NEWPROG, prog.name)
+        if prognr<len(bank.progs):
+            bank.progs[prognr] = prog
+            if self.nolimit:
+                self.libChange(PL_BANKCHNG)
+            result = PL_DUMPADD
+        else:
+            while len(bank.progs)<prognr:
+                self.bankdumpmiss.append((self.bankdumpnr,len(bank.progs)))
+                bank.progs.append(SingleProg())
+                if self.nolimit:
+                    self.appendVisible(bi)
+                    self.libChange(PL_BANKCHNG, bank.progs[-1].name)
+            bank.progs.append(prog)
+            if self.nolimit:
+                self.appendVisible(bi)
+                self.libChange(PL_BANKCHNG, prog.name)
+            if len(bank.progs)==128:
+                result = PL_DUMPCHK
+            else:
+                result = PL_DUMPCONT
+        return result
+
+    def bankDumpGetMissing(self, targetlen=128):
+        bi = self.bankdumpbi
+        bank = self.banks[bi]
+        while len(bank.progs)<targetlen:
+            self.bankdumpmiss.append((self.bankdumpnr,len(bank.progs)))
+            bank.progs.append(SingleProg())
+            if self.nolimit:
+                self.appendVisible(bi)
+                self.libChange(PL_BANKCHNG, bank.progs[-1].name)
+        return self.bankdumpmiss
 
     def storeProg(self, prog, progind, bankind, name):
         prog.setName(name)
@@ -342,7 +439,7 @@ class ProgLibrary(object):
         else:
             bank.progs.append(prog)
             progind = self.appendVisible(bankind)
-        self.libChange(PL_NEWPROG)
+        self.libChange(PL_BANKCHNG)
         self.setProg(progind, bankind)
 
 
@@ -372,6 +469,7 @@ class ProgInterface(object):
         self.prgchng_lst = []
         self.libchng_lst = []
         self.req = REQ_NONE
+        self.bankreqlist = None
         self.alwaysrecv = False
 
         gui.setNotify(self.midiNotify)
@@ -455,7 +553,8 @@ class ProgInterface(object):
 
     def rcvSingleVirus(self, midimsg):
         if self.req in (REQ_NONE, REQ_SINGLE, REQ_SINGLE_QUEUED):
-            self.progChange(SingleProg(midimsg.getSingleDump()))
+            if midimsg.validDump():
+                self.progChange(SingleProg(midimsg.getSingleDump()))
             if self.req==REQ_SINGLE:
                 self.req = REQ_NONE
             elif self.req==REQ_SINGLE_QUEUED:
@@ -470,25 +569,41 @@ class ProgInterface(object):
                     5...  ROM A - """
         self.req = REQ_BANK
         self.bankreqlist = reqlist
-        self.reqNextBank(init=True)
+        self.rereadlist = []
+        self.reqNextBank()
 
-    def reqNextBank(self, init=False):
-        if not self.req==REQ_BANK:
+    def reqNextBank(self):
+        if self.req!=REQ_BANK:
             return
-        if init:
-            self.bankreqind = 0
+        if len(self.rereadlist)>0:
+            (banknr,prognr) = self.rereadlist.pop(0)
+            # print "reread", banknr, prognr
+            self.midiint.reqsingledump(banknr, prognr)
+        elif len(self.bankreqlist)>0:
+            (bank,name) = self.bankreqlist.pop(0)
+            self.midiint.reqbankdump(bank)
+            self.proglib.bankDumpInit(name, bank)
         else:
-            self.bankreqind += 1
-        if self.bankreqind >= len(self.bankreqlist):
             self.req = REQ_NONE
-            return
-        (bank,name) = self.bankreqlist[self.bankreqind]
-        self.midiint.reqbankdump(bank)
-        self.proglib.newBank(name)
 
-    def abortBankRead(self):
+    def rcvBankDump(self, midimsg):
+        if midimsg.validDump():
+            result = self.proglib.bankDumpAddProg(midimsg)
+            if result==PL_DUMPCHK:
+                self.rereadlist = self.proglib.bankDumpGetMissing()
+                self.reqNextBank()
+            elif result==PL_DUMPADD:
+                self.reqNextBank()
+
+    def stopBankRead(self):
         self.req = REQ_ABORT
         self.midiint.reqsingledump()
+
+    def resumeBankRead(self):
+        if self.bankreqlist!=None:
+            self.req = REQ_BANK
+            self.rereadlist = self.proglib.bankDumpGetMissing()
+            self.reqNextBank()
 
     def midiNotify(self, midimsg):
         if midimsg.isController():
@@ -499,9 +614,7 @@ class ProgInterface(object):
             if self.alwaysrecv:
                 self.readSingleVirus()
         elif midimsg.isBankDump():
-            self.proglib.appendProg(midimsg)
-            if midimsg.getProgNr()==127:
-                self.reqNextBank()
+            self.rcvBankDump(midimsg)
 
 
 ##
@@ -648,6 +761,9 @@ class MidiMsg(object):
         return self.type==MIDI_SINGLEDUMP \
             and self.getBankNr()>0
 
+    def validDump(self):
+        return len(self.msg)==SYSEX_OFFSET+4+DUMP_LENGTH
+
     def getSingleDump(self):
         return self.msg[SYSEX_OFFSET+3:-1]
 
@@ -725,9 +841,9 @@ class MidiInterface(object):
     def isOpen(self):
         return self.threadid!=0
 
-    def reqsingledump(self):
+    def reqsingledump(self, banknr=0, prognr=0x40):
 #        self.dump = None
-        msg = makeSysEx([0x30, 0, 0x40])
+        msg = makeSysEx([0x30, banknr, prognr])
         pyrawmidi.write(msg)
 #        while self.dump==None:
 #            time.sleep(.1)

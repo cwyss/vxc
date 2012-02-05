@@ -599,9 +599,9 @@ class ProgLibGUI(wx.Panel):
     def __del__(self):
         self.limitdialog.Destroy()
 
-    def onLibChange(self, newpart=vxcmidi.PL_NEWLIB, appendName=None):
+    def onLibChange(self, newpart=vxcmidi.PL_LIBCHNG, appendName=None):
         pl  = self.interface.proglib
-        if newpart==vxcmidi.PL_NEWLIB:
+        if newpart==vxcmidi.PL_LIBCHNG:
             self.banklist.Set(pl.getBankNames())
             bankind = self.interface.proglib.getCurrentBank()
             self.banklist.SetSelection(bankind)
@@ -618,7 +618,8 @@ class ProgLibGUI(wx.Panel):
             if bankind>=0:
                 content = self.interface.proglib.getBankContents(bankind)
                 for i in range(len(content)):
-                    self.proglist.InsertStringItem(i, content[i][0])
+                    string = "%3d %s" % (content[i][1], content[i][0])
+                    self.proglist.InsertStringItem(i, string)
                 # pi = self.interface.proglib.getCurrentProg()
                 # self.proglist.Select(pi, True)
         elif bankind==self.banklist.GetCount()-1:
@@ -1296,8 +1297,10 @@ class vxcFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.onSaveProgLib, item)
         item = menu.Append(-1, 'Read Bank from Virus...')
         self.Bind(wx.EVT_MENU, self.onReadBank, item)
-        item = menu.Append(-1, 'Abort Bank Read')
-        self.Bind(wx.EVT_MENU, self.onAbortRead, item)
+        item = menu.Append(-1, 'Stop Bank Read')
+        self.Bind(wx.EVT_MENU, self.onStopRead, item)
+        item = menu.Append(-1, 'Resume Bank Read')
+        self.Bind(wx.EVT_MENU, self.onResumeRead, item)
         item = menu.Append(-1, 'New Bank')
         self.Bind(wx.EVT_MENU, self.onNewBank, item)
         item = menu.Append(-1, 'Delete Bank')
@@ -1359,8 +1362,17 @@ class vxcFrame(wx.Frame):
                 showError(str(error))
         dialog.Destroy()
 
-    def onAbortRead(self, evt):
-        self.interface.abortBankRead()
+    def onStopRead(self, evt):
+        try:
+            self.interface.stopBankRead()
+        except StandardError as error:
+            showError(str(error))
+
+    def onResumeRead(self, evt):
+        try:
+            self.interface.resumeBankRead()
+        except StandardError as error:
+            showError(str(error))
 
     def onNewBank(self, evt):
         name = wx.GetTextFromUser("Enter new bank name", "New Bank")
@@ -1382,9 +1394,11 @@ class vxcFrame(wx.Frame):
         if dialog.ShowModal()==wx.ID_OK:
             try:
                 self.interface.proglib.loadFromFile(dialog.GetPath())
+            except vxcmidi.ProgLibError as error:
+                showError(str(error))
             except IOError as error:
                 showError('Error reading program library.\n' +
-                          "%s: '%s'" % (error.strerror, error.filename))
+                          error.strerror+': '+error.filename)
 
     def onSaveProgLib(self, evt):
         wildcard="Program Library (*.vlb)|*.vlb|All Files|*"
@@ -1413,9 +1427,11 @@ class vxcGUI(object):
         try:
             if len(self.prefs.proglib):
                 self.interface.proglib.loadFromFile(self.prefs.proglib)
+        except vxcmidi.ProgLibError as error:
+            showError(str(error))
         except IOError as error:
             showError('Error reading program library.\n' +
-                      "%s: '%s'" % (error.strerror, error.filename))
+                      error.strerror+': '+error.filename)
 
 #        self.frame.Fit()
         self.frame.Show()
