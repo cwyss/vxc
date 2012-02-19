@@ -165,10 +165,12 @@ PL_DUMPADD  = 2
 
 LIMIT_AND = 0
 LIMIT_OR = 1
+LIMITBOOL_NAMES = {LIMIT_AND: "and", LIMIT_OR: "or"}
 
 LIMIT_EQ = 0
 LIMIT_GE = 1
 LIMIT_LE = 2
+LIMITREL_NAMES = {LIMIT_EQ: "=", LIMIT_GE: ">=", LIMIT_LE: "<="}
 
 class ProgLibError(Exception):
     def __init__(self, filename, 
@@ -191,10 +193,12 @@ class ProgLibrary(object):
         self.current_bank = 0
         self.current_prog = 0
         self.nolimit = True
+        self.visProgCnt = 0
 
-    # ctrlcond = list of lists
-    # [boolop, ctrlid, relatop, val]
     def setLimitCrit(self, namepat, ctrlcond):
+        """ ctrlcond = list of lists
+          [boolop, ctrlid, relatop, val] 
+          """
         self.nolimit = True
         if namepat!='':
             repl = lambda m: '\\'+m.group(0)
@@ -206,48 +210,58 @@ class ProgLibrary(object):
         else:
             self.namepat = ''
         if ctrlcond!=[]:
-            ctrlcond[0][0] = -1
             self.ctrlcond = ctrlcond
             self.nolimit = False
         else:
-            ctrlcond = []
+            self.ctrlcond = []
         self.updateVisible()
         if self.current_bank>=len(self.visible):
             self.current_bank = 0
         self.libChange(PL_LIBCHNG)
 
+    def matchCond(self, prog, cc):
+        val = prog.getCtrl(cc[1])
+        relop = cc[2]
+        if relop==LIMIT_EQ:
+            return val==cc[3]
+        elif relop==LIMIT_GE:
+            return val>=cc[3]
+        elif relop==LIMIT_LE:
+            return val<=cc[3]
+
     def matchProg(self, prog):
         b1 = True
         b2 = True
-        for cc in self.ctrlcond:
-            val = prog.getCtrl(cc[1])
-            relop = cc[2]
-            if relop==LIMIT_EQ:
-                bb = val==cc[3]
-            elif relop==LIMIT_GE:
-                bb = val>=cc[3]
-            elif relop==LIMIT_LE:
-                bb = val<=cc[3]
+        for (i,cc) in enumerate(self.ctrlcond):
+            bb = self.matchCond(prog, cc)
             boolop = cc[0]
-            if boolop==LIMIT_OR:
+            if i==0:
+                b2 = bb
+            elif boolop==LIMIT_OR:
                 b2 = b2 or bb
             elif boolop==LIMIT_AND:
                 b1 = b1 and b2
-                b2 = bb
-            else:
                 b2 = bb
         b1 = b1 and b2
         return b1 and bool(re.match(self.namepat, prog.name.lower()))
 
     def updateVisible(self):
+        currprog = self.getProg(self.current_prog, self.current_bank)
         self.visible = []
+        self.current_prog = 0
+        self.current_bank = 0
+        self.visProgCnt = 0
         for bi,bank in enumerate(self.banks):
             bv = []
             for pi,prog in enumerate(bank.progs):
                 if self.nolimit or self.matchProg(prog):
                     bv.append(pi)
+                    if currprog==prog:
+                        self.current_bank = len(self.visible)
+                        self.current_prog = len(bv)-1
             if self.nolimit or len(bv)>0:
                 self.visible.append((bi,bv))
+            self.visProgCnt += len(bv)
 
     def appendVisible(self, bankind):
         bi,bv = self.visible[bankind]
@@ -255,13 +269,17 @@ class ProgLibrary(object):
         pi = len(proglist)-1
         # if self.nolimit or re.match(self.namepat, proglist[pi].name.lower()):
         bv.append(pi)
+        self.visProgCnt += 1
         return len(bv)-1
 
     def getCurrentBank(self):
         return self.current_bank
     def getCurrentProg(self):
         return self.current_prog
-    
+
+    def getVisibleInfo(self):
+        return (self.visProgCnt, len(self.visible), self.nolimit)
+
     def getBankNames(self):
         names = []
         for bi,bv in self.visible:
@@ -463,7 +481,7 @@ class ProgInterface(object):
         self.gui = gui
         self.midiint = MidiInterface(gui)
         self.current = SingleProg()
-        self.has_changed = False
+        self.is_modified = False
         self.proglib = ProgLibrary(self.progChange, self.libChange)
         self.listeners = {}
         self.prgchng_lst = []
@@ -488,16 +506,16 @@ class ProgInterface(object):
     def addPrgChngListener(self, func):
         self.prgchng_lst.append(func)
 
-    def progChange(self, prog, changed=False, sendmidi=False):
+    def progChange(self, prog, modified=False, sendmidi=False):
         self.current = prog
-        self.has_changed = changed
+        self.is_modified = modified
         for func in self.prgchng_lst:
             func()
         if sendmidi and self.midiint.isOpen():
             self.midiint.sendsingleedit(prog.dump)
     
-    def progHasChanged(self):
-        return self.has_changed
+    def progModified(self):
+        return self.is_modified
 
     def storeProg(self, prognr, banknr, name):
         self.proglib.storeProg(self.current.copy(), prognr, banknr, name)
@@ -518,14 +536,14 @@ class ProgInterface(object):
         if self.midiint.isOpen():
             self.midiint.writeCtrl(ctrlid, val)
         self.gui.setMidiMsg(makeCtrlInfoStr(ctrlid, val))
-        if not self.has_changed:
-            self.progChange(self.current, changed=True)
+        if not self.is_modified:
+            self.progChange(self.current, modified=True)
 
     def onController(self, ctrlid, value):
         self.current.setCtrl(ctrlid, value)
         self.notify(ctrlid, value)
-        if not self.has_changed:
-            self.progChange(self.current, changed=True)
+        if not self.is_modified:
+            self.progChange(self.current, modified=True)
 
     def connect(self, devname, filter):
         if not self.midiint.isOpen():
@@ -577,7 +595,6 @@ class ProgInterface(object):
             return
         if len(self.rereadlist)>0:
             (banknr,prognr) = self.rereadlist.pop(0)
-            # print "reread", banknr, prognr
             self.midiint.reqsingledump(banknr, prognr)
         elif len(self.bankreqlist)>0:
             (bank,name) = self.bankreqlist.pop(0)

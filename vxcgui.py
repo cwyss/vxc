@@ -509,8 +509,10 @@ class StoreDialog(wx.Dialog):
 
 class LimitDialog(wx.Dialog):
     def __init__(self, proglib):
-        wx.Dialog.__init__(self, None, title='Limit Program List')
+        wx.Dialog.__init__(self, None, title='Limit Program List',
+                           style=wx.RESIZE_BORDER)
         self.proglib = proglib
+        self.ctrlcond = []
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(sizer)
@@ -524,44 +526,133 @@ class LimitDialog(wx.Dialog):
 
         self.condlist = wx.ListBox(self, -1)
         sizer.Add(self.condlist, 1, wx.EXPAND|wx.LEFT|wx.RIGHT|wx.BOTTOM, 5)
+        self.condlist.Bind(wx.EVT_LISTBOX, self.onSelCond)
 
         linesizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.boolop = wx.Choice(self, -1, choices=['and','or'])
+        self.boolop = wx.Choice(self, -1, 
+                                choices=vxcmidi.LIMITBOOL_NAMES.values())
         linesizer.Add(self.boolop, 0, wx.LEFT|wx.RIGHT, 5)
+        self.boolop.Bind(wx.EVT_CHOICE, self.onBoolOp)
         self.ctrlpage = wx.Choice(self, -1,
-                                  choices=['CTRL_A','CTRL_B',
-                                           'CTRL_C','CTRL_6E'])
+                                  choices=vxcmidi.CTRL_NAMES.values())
         linesizer.Add(self.ctrlpage, 0, wx.RIGHT, 5)
+        self.ctrlpage.Bind(wx.EVT_CHOICE, self.onCtrlPageNr)
         self.ctrlnr = wx.SpinCtrl(self, max=127)
         linesizer.Add(self.ctrlnr, 0, wx.RIGHT, 5)
-        self.relatop = wx.Choice(self, -1, choices=['=','>=','<='])
+        self.ctrlnr.Bind(wx.EVT_SPINCTRL, self.onCtrlPageNr)
+        self.relatop = wx.Choice(self, -1, 
+                                 choices=vxcmidi.LIMITREL_NAMES.values())
         linesizer.Add(self.relatop, 0, wx.RIGHT, 5)
+        self.relatop.Bind(wx.EVT_CHOICE, self.onRelatOp)
         self.val = wx.SpinCtrl(self, max=127)
         linesizer.Add(self.val, 0, wx.RIGHT, 5)
+        self.val.Bind(wx.EVT_SPINCTRL, self.onVal)
         sizer.Add(linesizer, 0, wx.EXPAND|wx.BOTTOM, 5)
 
         linesizer = wx.BoxSizer(wx.HORIZONTAL)
         but = wx.Button(self, -1, 'Add Cond')
         but.Bind(wx.EVT_BUTTON, self.onAddCond)
-        linesizer.Add(but, 0)
+        linesizer.Add(but, 0, wx.LEFT, 5)
         but = wx.Button(self, -1, 'Rem Cond')
         but.Bind(wx.EVT_BUTTON, self.onRemCond)
         linesizer.Add(but, 0)
         but = wx.Button(self, -1, 'Clear All')
         but.Bind(wx.EVT_BUTTON, self.onClearAll)
         linesizer.Add(but, 0)
-        but = wx.Button(self, wx.ID_OK, 'Close')
+        but = wx.Button(self, -1, 'Update')
+        but.Bind(wx.EVT_BUTTON, self.onUpdate)
         linesizer.Add(but, 0)
+        but = wx.Button(self, wx.ID_OK, 'Close')
+        but.Bind(wx.EVT_BUTTON, self.onClose)
+        linesizer.Add(but, 0, wx.RIGHT, 5)
         sizer.Add(linesizer, 0, wx.EXPAND|wx.BOTTOM, 5)
 
         self.Fit()
+        sizer.SetSizeHints(self)
+        self.updateCondList()
+
+    def enableCondBut(self, val=True):
+        self.boolop.Enable(val)
+        self.ctrlpage.Enable(val)
+        self.ctrlnr.Enable(val)
+        self.relatop.Enable(val)
+        self.val.Enable(val)
+
+    def makeCondStr(self, cond):
+        return "%3s %s %3d %2s %d" % (vxcmidi.LIMITBOOL_NAMES[cond[0]],
+                                      vxcmidi.CTRL_NAMES[cond[1][0]],
+                                      cond[1][1],
+                                      vxcmidi.LIMITREL_NAMES[cond[2]],
+                                      cond[3])
+
+    def updateCond(self, ind):
+        str = self.makeCondStr(self.ctrlcond[ind])
+        self.condlist.SetString(ind, str)
+
+    def updateCondList(self, selind=0):
+        condlen = len(self.ctrlcond)
+        if condlen>0:
+            strlst = [self.makeCondStr(cond) for cond in self.ctrlcond]
+            self.condlist.Set(strlst)
+            if selind>=condlen:
+                selind = condlen-1
+            self.condlist.SetSelection(selind)
+            self.enableCondBut(True)
+            self.showCond(selind)
+        else:
+            self.condlist.Clear()
+            self.enableCondBut(False)
+
+    def showCond(self, ind):
+        cond = self.ctrlcond[ind]
+        self.boolop.SetSelection(cond[0])
+        self.ctrlpage.SetSelection(cond[1][0])
+        self.ctrlnr.SetValue(cond[1][1])
+        self.relatop.SetSelection(cond[2])
+        self.val.SetValue(cond[3])
+
+    def onSelCond(self, evt):
+        selind = self.condlist.GetSelection()
+        if selind>=0:
+            self.showCond(selind)
+
+    def setCond(self, cind, value):
+        selind = self.condlist.GetSelection()
+        self.ctrlcond[selind][cind] = value
+        self.updateCond(selind)
+    def onBoolOp(self, evt):
+        self.setCond(0, self.boolop.GetSelection())
+    def onCtrlPageNr(self, evt):
+        self.setCond(1, (self.ctrlpage.GetSelection(), 
+                         self.ctrlnr.GetValue()))
+    def onRelatOp(self, evt):
+        self.setCond(2, self.relatop.GetSelection())
+    def onVal(self, evt):
+        self.setCond(3, self.val.GetValue())
 
     def onAddCond(self, evt):
-        pass
+        self.ctrlcond.append([vxcmidi.LIMIT_AND, (vxcmidi.CTRL_A,0),
+                              vxcmidi.LIMIT_EQ, 0])
+        self.updateCondList(len(self.ctrlcond)-1)
+
     def onRemCond(self, evt):
-        pass
+        rmind = self.condlist.GetSelection()
+        if rmind>=0:
+            del self.ctrlcond[rmind]
+            self.updateCondList(rmind)
+
     def onClearAll(self, evt):
-        self.proglib.setLimitCrit(self.name.GetValue())
+        self.name.SetValue("")
+        self.ctrlcond = []
+        self.updateCondList()
+        self.onUpdate()
+
+    def onClose(self, evt):
+        self.onUpdate()
+        self.Close()
+
+    def onUpdate(self, evt=None):
+        self.proglib.setLimitCrit(self.name.GetValue(), self.ctrlcond)
 
 
 class ProgLibGUI(wx.Panel):
@@ -583,9 +674,9 @@ class ProgLibGUI(wx.Panel):
         butsizer.Add(self.storebut, 0)
         self.limitbut = wx.Button(self, -1, 'Limit')
         butsizer.Add(self.limitbut, 0)
-        leftsizer.Add(butsizer, 0)
+        leftsizer.Add(butsizer, 0, flag=wx.EXPAND)
 
-        self.sizer.Add(leftsizer, 1, flag=wx.EXPAND)
+        self.sizer.Add(leftsizer, 0, flag=wx.EXPAND)
         self.proglist = wx.ListCtrl(self, style=wx.LC_LIST)
         self.sizer.Add(self.proglist, 3, flag=wx.EXPAND)
 
@@ -1222,6 +1313,7 @@ class vxcFrame(wx.Frame):
         self.interface = interface
         self.prefs = prefs
         interface.addPrgChngListener(self.onProgChange)
+        interface.addLibChngListener(self.onLibChange)
 
         self.statusbar = self.CreateStatusBar()
         self.statusbar.SetFieldsCount(2)
@@ -1229,8 +1321,11 @@ class vxcFrame(wx.Frame):
         self.createMenu()
 
         self.notebook = wx.Notebook(self)
+        print "ctrlpages"
         self.initCtrlPages()
+        print "controllersGUI"
         self.controllers = ControllersGUI(self.notebook, interface)
+        print "proglibGUI"
         self.proglib = ProgLibGUI(self.notebook, interface)
         self.setupNotebook()
 
@@ -1255,12 +1350,18 @@ class vxcFrame(wx.Frame):
         self.notebook.AddPage(self.proglib, 'Library')
 
     def onProgChange(self):
-        if self.interface.progHasChanged()==True:
+        if self.interface.progModified()==True:
             line = '** '
         else:
             line = '-- '
         line += self.interface.current.name
         self.statusbar.SetStatusText(line, 0)
+
+    def onLibChange(self, newpart, appendName):
+        numprogs, numbanks, nolimit = self.interface.proglib.getVisibleInfo()
+        line = "%d programs in %d banks (%s)" % \
+            (numprogs, numbanks, "all" if nolimit else "limit")
+        self.statusbar.SetStatusText(line, 1)
 
     def setMidiMsg(self, midimsg):
         self.statusbar.SetStatusText(midimsg, 1)
@@ -1420,10 +1521,14 @@ class vxcGUI(object):
         self.app.Bind(EVT_MIDI, self.onMidi)
 
 #        self.prefs = None
+        print "prefs"
         self.prefs = Prefs()
+        print "interface"
         self.interface = vxcmidi.ProgInterface(self)
+        print "frame"
         self.frame = vxcFrame(self.interface, self.prefs)
 
+        print "proglib"
         try:
             if len(self.prefs.proglib):
                 self.interface.proglib.loadFromFile(self.prefs.proglib)
@@ -1433,6 +1538,7 @@ class vxcGUI(object):
             showError('Error reading program library.\n' +
                       error.strerror+': '+error.filename)
 
+        print "show"
 #        self.frame.Fit()
         self.frame.Show()
 
