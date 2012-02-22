@@ -310,9 +310,15 @@ class ProgLibrary(object):
             bank = self.current_bank
         self.current_bank = bank
         self.current_prog = prog
-        p = self.getProg(prog, bank)
-        if p:
-            self.progChange(p.copy(), sendmidi=True)
+        try:
+            bi,bv = self.visible[bank]
+            pi = bv[prog]
+            b = self.banks[bi]
+            p = b.progs[pi]
+            location = "%s %3d" % (b.name, pi)
+            self.progChange(p.copy(), location, sendmidi=True)
+        except IndexError:
+            pass
 
     def nextProg(self):
         maxbank = len(self.visible)
@@ -481,6 +487,7 @@ class ProgInterface(object):
         self.gui = gui
         self.midiint = MidiInterface(gui)
         self.current = SingleProg()
+        self.current_location = ""
         self.is_modified = False
         self.proglib = ProgLibrary(self.progChange, self.libChange)
         self.listeners = {}
@@ -506,15 +513,21 @@ class ProgInterface(object):
     def addPrgChngListener(self, func):
         self.prgchng_lst.append(func)
 
-    def progChange(self, prog, modified=False, sendmidi=False):
+    def progChange(self, prog, location, modified=False, sendmidi=False):
         self.current = prog
+        self.current_location = location
         self.is_modified = modified
         for func in self.prgchng_lst:
             func()
         if sendmidi and self.midiint.isOpen():
             self.midiint.sendsingleedit(prog.dump)
-    
-    def progModified(self):
+
+    def setProgModified(self):
+        self.is_modified = True
+        for func in self.prgchng_lst:
+            func()
+
+    def isProgModified(self):
         return self.is_modified
 
     def storeProg(self, prognr, banknr, name):
@@ -537,13 +550,13 @@ class ProgInterface(object):
             self.midiint.writeCtrl(ctrlid, val)
         self.gui.setMidiMsg(makeCtrlInfoStr(ctrlid, val))
         if not self.is_modified:
-            self.progChange(self.current, modified=True)
+            self.setProgModified()
 
     def onController(self, ctrlid, value):
         self.current.setCtrl(ctrlid, value)
         self.notify(ctrlid, value)
         if not self.is_modified:
-            self.progChange(self.current, modified=True)
+            self.setProgModified()
 
     def connect(self, devname, filter):
         if not self.midiint.isOpen():
@@ -572,7 +585,8 @@ class ProgInterface(object):
     def rcvSingleVirus(self, midimsg):
         if self.req in (REQ_NONE, REQ_SINGLE, REQ_SINGLE_QUEUED):
             if midimsg.validDump():
-                self.progChange(SingleProg(midimsg.getSingleDump()))
+                self.progChange(SingleProg(midimsg.getSingleDump()),
+                                "-Virus-")
             if self.req==REQ_SINGLE:
                 self.req = REQ_NONE
             elif self.req==REQ_SINGLE_QUEUED:
@@ -859,19 +873,8 @@ class MidiInterface(object):
         return self.threadid!=0
 
     def reqsingledump(self, banknr=0, prognr=0x40):
-#        self.dump = None
         msg = makeSysEx([0x30, banknr, prognr])
         pyrawmidi.write(msg)
-#        while self.dump==None:
-#            time.sleep(.1)
-#        return self.dump[3:-1]
-
-    # def rcvsingledump(self, msg):
-    #     if msg[1]==0 and msg[2]==0x40:
-    #         self.lock.acquire()
-    #         if self.dump==None:
-    #             self.dump = msg
-    #         self.lock.release()
 
     def reqbankdump(self, bank):
         msg = makeSysEx([0x32,bank])

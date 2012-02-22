@@ -661,7 +661,6 @@ class ProgLibGUI(wx.Panel):
         self.interface = interface
         interface.addLibChngListener(self.onLibChange)
         interface.addPrgChngListener(self.onProgChange)
-        self.limitdialog = LimitDialog(interface.proglib)
 
         self.sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.SetSizer(self.sizer)
@@ -671,9 +670,7 @@ class ProgLibGUI(wx.Panel):
         
         butsizer = wx.BoxSizer(wx.HORIZONTAL)
         self.storebut = wx.ToggleButton(self, -1, 'Store')
-        butsizer.Add(self.storebut, 0)
-        self.limitbut = wx.Button(self, -1, 'Limit')
-        butsizer.Add(self.limitbut, 0)
+        butsizer.Add(self.storebut, 0, wx.LEFT|wx.RIGHT, 20)
         leftsizer.Add(butsizer, 0, flag=wx.EXPAND)
 
         self.sizer.Add(leftsizer, 0, flag=wx.EXPAND)
@@ -683,12 +680,8 @@ class ProgLibGUI(wx.Panel):
         self.banklist.Bind(wx.EVT_LISTBOX, self.onBankSel)
         self.proglist.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.onProgSel)
         self.storebut.Bind(wx.EVT_TOGGLEBUTTON, self.onStore)
-        self.limitbut.Bind(wx.EVT_BUTTON, self.onLimit)
 
         self.onLibChange()
-
-    def __del__(self):
-        self.limitdialog.Destroy()
 
     def onLibChange(self, newpart=vxcmidi.PL_LIBCHNG, appendName=None):
         pl  = self.interface.proglib
@@ -711,8 +704,8 @@ class ProgLibGUI(wx.Panel):
                 for i in range(len(content)):
                     string = "%3d %s" % (content[i][1], content[i][0])
                     self.proglist.InsertStringItem(i, string)
-                # pi = self.interface.proglib.getCurrentProg()
-                # self.proglist.Select(pi, True)
+                pi = self.interface.proglib.getCurrentProg()
+                self.proglist.Select(pi, True)
         elif bankind==self.banklist.GetCount()-1:
             self.proglist.Append((appendName,))
 
@@ -753,9 +746,6 @@ class ProgLibGUI(wx.Panel):
                     bankind = self.interface.proglib.getCurrentBank()
                     self.interface.storeProg(-1, bankind, self.storeName)
             dialog.Destroy()
-
-    def onLimit(self, evt):
-        self.limitdialog.Show()
 
 
 class ReadBankDialog(wx.Dialog):
@@ -1307,11 +1297,12 @@ class Prefs(wx.Dialog):
 
 
 class vxcFrame(wx.Frame):
-    def __init__(self, interface, prefs):
+    def __init__(self, interface):
         wx.Frame.__init__(self, parent=None, title='VirusXControl',
                           size=(800,500))
         self.interface = interface
-        self.prefs = prefs
+        self.prefs = Prefs()
+        self.limitdialog = LimitDialog(interface.proglib)
         interface.addPrgChngListener(self.onProgChange)
         interface.addLibChngListener(self.onLibChange)
 
@@ -1329,8 +1320,24 @@ class vxcFrame(wx.Frame):
         self.proglib = ProgLibGUI(self.notebook, interface)
         self.setupNotebook()
 
+        print "proglib"
+        if len(self.prefs.proglib):
+            self.loadProgLib(self.prefs.proglib)
+        else:
+            self.onProgChange()
+
     def __del__(self):
+        self.limitdialog.Destroy()
         self.prefs.close()
+
+    def loadProgLib(self, libname):
+        try:
+            self.interface.proglib.loadFromFile(libname)
+        except vxcmidi.ProgLibError as error:
+            showError(str(error))
+        except IOError as error:
+            showError('Error reading program library.\n' +
+                      error.strerror+': '+error.filename)
 
     def initCtrlPages(self):
         self.ctrlpages = vxcctrl.CtrlPages()
@@ -1350,11 +1357,12 @@ class vxcFrame(wx.Frame):
         self.notebook.AddPage(self.proglib, 'Library')
 
     def onProgChange(self):
-        if self.interface.progModified()==True:
+        if self.interface.isProgModified()==True:
             line = '** '
         else:
             line = '-- '
-        line += self.interface.current.name
+        line += "[%s] %s" % (self.interface.current_location,
+                             self.interface.current.name)
         self.statusbar.SetStatusText(line, 0)
 
     def onLibChange(self, newpart, appendName):
@@ -1372,10 +1380,12 @@ class vxcFrame(wx.Frame):
         menu = wx.Menu()
         item = menu.AppendCheckItem(-1, '&Connect to Virus\tctrl-c')
         self.Bind(wx.EVT_MENU, self.onConnect, item)
+        menu.AppendSeparator()
         item = menu.Append(-1, 'Preferences...')
         self.Bind(wx.EVT_MENU, self.onPrefs, item)
         item = menu.Append(-1, 'Controller Setup...')
         self.Bind(wx.EVT_MENU, self.onCtrlSetup, item)
+        menu.AppendSeparator()
         item = menu.Append(-1, '&Quit\tctrl-q')
         self.Bind(wx.EVT_MENU, self.onQuit, item)
         menubar.Append(menu, '&Main')
@@ -1385,7 +1395,14 @@ class vxcFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.onNextProg, item)
         item = menu.Append(-1, 'Prev\tctrl-p')
         self.Bind(wx.EVT_MENU, self.onPrevProg, item)
-        item = menu.Append(-1, 'Receive')
+        item = menu.Append(-1, 'Revert')
+        self.Bind(wx.EVT_MENU, self.onRevert, item)
+        item = menu.Append(-1, 'Store')
+        self.Bind(wx.EVT_MENU, self.onStore, item)
+        item = menu.Append(-1, 'Limit...\tctrl-l')
+        self.Bind(wx.EVT_MENU, self.onLimit, item)
+        menu.AppendSeparator()
+        item = menu.Append(-1, 'Receive\tctrl-r')
         self.Bind(wx.EVT_MENU, self.onRecvProg, item)
         item = menu.AppendCheckItem(-1, 'Always Receive')
         self.Bind(wx.EVT_MENU, self.onAlwaysRecv, item)
@@ -1396,16 +1413,18 @@ class vxcFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.onLoadProgLib, item)
         item = menu.Append(-1, 'Save ProgLib...')
         self.Bind(wx.EVT_MENU, self.onSaveProgLib, item)
+        menu.AppendSeparator()
+        item = menu.Append(-1, 'New Bank')
+        self.Bind(wx.EVT_MENU, self.onNewBank, item)
+        item = menu.Append(-1, 'Delete Bank')
+        self.Bind(wx.EVT_MENU, self.onDeleteBank, item)
+        menu.AppendSeparator()
         item = menu.Append(-1, 'Read Bank from Virus...')
         self.Bind(wx.EVT_MENU, self.onReadBank, item)
         item = menu.Append(-1, 'Stop Bank Read')
         self.Bind(wx.EVT_MENU, self.onStopRead, item)
         item = menu.Append(-1, 'Resume Bank Read')
         self.Bind(wx.EVT_MENU, self.onResumeRead, item)
-        item = menu.Append(-1, 'New Bank')
-        self.Bind(wx.EVT_MENU, self.onNewBank, item)
-        item = menu.Append(-1, 'Delete Bank')
-        self.Bind(wx.EVT_MENU, self.onDeleteBank, item)
         menubar.Append(menu, '&Library')
 
         self.SetMenuBar(menubar)
@@ -1446,7 +1465,10 @@ class vxcFrame(wx.Frame):
         self.Close()
 
     def onRecvProg(self, evt):
-        self.interface.readSingleVirus()
+        try:
+            self.interface.readSingleVirus()
+        except StandardError as error:
+            showError(str(error))
         
     def onAlwaysRecv(self, evt):
         recv = self.GetMenuBar().IsChecked(evt.GetId())
@@ -1493,13 +1515,7 @@ class vxcFrame(wx.Frame):
         dialog = wx.FileDialog(None, "Load Program Library", style=wx.OPEN,
                                wildcard=wildcard)
         if dialog.ShowModal()==wx.ID_OK:
-            try:
-                self.interface.proglib.loadFromFile(dialog.GetPath())
-            except vxcmidi.ProgLibError as error:
-                showError(str(error))
-            except IOError as error:
-                showError('Error reading program library.\n' +
-                          error.strerror+': '+error.filename)
+            self.loadProgLib(dialog.GetPath())
 
     def onSaveProgLib(self, evt):
         wildcard="Program Library (*.vlb)|*.vlb|All Files|*"
@@ -1512,6 +1528,13 @@ class vxcFrame(wx.Frame):
                 showError('Error writing program library.\n' +
                           "%s: '%s'" % (error.strerror, error.filename))
 
+    def onLimit(self, evt):
+        self.limitdialog.Show()
+
+    def onRevert(self, evt):
+        pass
+    def onStore(self, evt):
+        pass
 
 
 class vxcGUI(object):
@@ -1520,23 +1543,10 @@ class vxcGUI(object):
         self.midinotify = self.nop
         self.app.Bind(EVT_MIDI, self.onMidi)
 
-#        self.prefs = None
-        print "prefs"
-        self.prefs = Prefs()
         print "interface"
         self.interface = vxcmidi.ProgInterface(self)
         print "frame"
-        self.frame = vxcFrame(self.interface, self.prefs)
-
-        print "proglib"
-        try:
-            if len(self.prefs.proglib):
-                self.interface.proglib.loadFromFile(self.prefs.proglib)
-        except vxcmidi.ProgLibError as error:
-            showError(str(error))
-        except IOError as error:
-            showError('Error reading program library.\n' +
-                      error.strerror+': '+error.filename)
+        self.frame = vxcFrame(self.interface)
 
         print "show"
 #        self.frame.Fit()
