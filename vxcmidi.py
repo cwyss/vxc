@@ -18,12 +18,10 @@ CTRL_A = 0
 CTRL_B = 1
 CTRL_C = 2
 CTRL_6E = 3
+CTRL_6F = 4
 
+CTRL_NAMES = ['Ctrl_A', 'Ctrl_B', 'Ctrl_C', 'Ctrl_6E', 'Ctrl_6F']
 
-CTRL_NAMES = {CTRL_A: 'Ctrl_A',
-              CTRL_B: 'Ctrl_B',
-              CTRL_C: 'Ctrl_C',
-              CTRL_6E: 'Ctrl_6E'}
 
 def makeCtrlInfoStr(ctrlid,  val, defval=None):
     istr = "%s %d: %d" % (CTRL_NAMES[ctrlid[0]], ctrlid[1], val)
@@ -36,7 +34,9 @@ DUMP_LENGTH = 514
 
 INDEX_TRANSL = {CTRL_A: 0,
                 CTRL_B: 128,
-                CTRL_6E: 257}
+                CTRL_6E: 257,
+                CTRL_6F: 385,
+                CTRL_C: 0}
 
 def ctrlIndex(ctrlid):
     """get index of ctrlid in dump"""
@@ -679,6 +679,7 @@ MIDI_CTRL_6E = 8
 MIDI_SINGLEDUMP = 9
 MIDI_SINGLECHG = 10
 MIDI_MULTICHG = 11
+MIDI_CTRL_6F = 12
 
 SYSEX_OFFSET = 6
 
@@ -707,6 +708,8 @@ class MidiMsg(object):
             sb = self.msg[SYSEX_OFFSET]
             if sb==0x6E:
                 self.type = MIDI_CTRL_6E
+            elif sb==0x6F:
+                self.type = MIDI_CTRL_6F
             elif sb==0x71:
                 self.type = MIDI_CTRL_B
             elif sb==0x72:
@@ -756,12 +759,15 @@ class MidiMsg(object):
         elif self.type==MIDI_CTRL_6E:
             return makeCtrlInfoStr((CTRL_6E,self.msg[SYSEX_OFFSET+2]),
                                    self.msg[SYSEX_OFFSET+3])
+        elif self.type==MIDI_CTRL_6F:
+            return makeCtrlInfoStr((CTRL_6F,self.msg[SYSEX_OFFSET+2]),
+                                   self.msg[SYSEX_OFFSET+3])
         else:
             return self.getRawStr()
 
     def isController(self):
         if self.type in (MIDI_CTRL_A,MIDI_CTRL_B,#MIDI_CTRL_C,
-                         MIDI_CTRL_6E):
+                         MIDI_CTRL_6E,MIDI_CTRL_6F):
             return True
         else:
             return False
@@ -771,6 +777,9 @@ class MidiMsg(object):
             return ((CTRL_A, self.msg[1]), self.msg[2])
         elif self.type==MIDI_CTRL_6E:
             return ((CTRL_6E, self.msg[SYSEX_OFFSET+2]), 
+                    self.msg[SYSEX_OFFSET+3])
+        elif self.type==MIDI_CTRL_6F:
+            return ((CTRL_6F, self.msg[SYSEX_OFFSET+2]), 
                     self.msg[SYSEX_OFFSET+3])
         elif self.type==MIDI_CTRL_B:
             return ((CTRL_B, self.msg[SYSEX_OFFSET+2]), 
@@ -825,6 +834,8 @@ class MidiInterface(object):
                 msg = [0x71, 0x40, number, value]
             elif page==CTRL_6E:
                 msg = [0x6E, 0x40, number, value]
+            elif page==CTRL_6F:
+                msg = [0x6F, 0x40, number, value]
             msg = makeSysEx(msg)
 
         #    printcmd(msg)

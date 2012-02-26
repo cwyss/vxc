@@ -534,7 +534,7 @@ class LimitDialog(wx.Dialog):
         linesizer.Add(self.boolop, 0, wx.LEFT|wx.RIGHT, 5)
         self.boolop.Bind(wx.EVT_CHOICE, self.onBoolOp)
         self.ctrlpage = wx.Choice(self, -1,
-                                  choices=vxcmidi.CTRL_NAMES.values())
+                                  choices=vxcmidi.CTRL_NAMES)
         linesizer.Add(self.ctrlpage, 0, wx.RIGHT, 5)
         self.ctrlpage.Bind(wx.EVT_CHOICE, self.onCtrlPageNr)
         self.ctrlnr = wx.SpinCtrl(self, max=127)
@@ -885,8 +885,7 @@ class CtrlDefDialog(wx.Dialog):
 
         label = wx.StaticText(self, label='Ctrl Id')
         self.idpage = wx.Choice(self, 
-                                choices=['CTRL_A','CTRL_B',
-                                         'CTRL_C','CTRL_6E'])
+                                choices=vxcmidi.CTRL_NAMES)
         self.idnumber = wx.SpinCtrl(self, max=127)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(label, 0, wx.ALIGN_CENTER_VERTICAL)
