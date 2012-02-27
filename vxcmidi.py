@@ -316,7 +316,7 @@ class ProgLibrary(object):
             b = self.banks[bi]
             p = b.progs[pi]
             location = "%s %3d" % (b.name, pi)
-            self.progChange(p.copy(), location, sendmidi=True)
+            self.progChange(p, location, sendmidi=True)
         except IndexError:
             pass
 
@@ -486,16 +486,15 @@ class ProgInterface(object):
     def __init__(self, gui):
         self.gui = gui
         self.midiint = MidiInterface(gui)
-        self.current = SingleProg()
-        self.current_location = ""
-        self.is_modified = False
-        self.proglib = ProgLibrary(self.progChange, self.libChange)
         self.listeners = {}
         self.prgchng_lst = []
         self.libchng_lst = []
         self.req = REQ_NONE
         self.bankreqlist = None
         self.alwaysrecv = False
+
+        self.progChange(SingleProg(), "")
+        self.proglib = ProgLibrary(self.progChange, self.libChange)
 
         gui.setNotify(self.midiNotify)
 
@@ -513,19 +512,28 @@ class ProgInterface(object):
     def addPrgChngListener(self, func):
         self.prgchng_lst.append(func)
 
-    def progChange(self, prog, location, modified=False, sendmidi=False):
-        self.current = prog
+    def progChange(self, prog, location, sendmidi=False):
+        self.current_orig = prog
+        self.current = prog.copy()
+        self.current_modi = None
         self.current_location = location
+        self.setProgModified(modified=False, sendmidi=sendmidi)
+
+    def revertProg(self):
+        if self.is_modified:
+            self.current_modi = self.current
+            self.current = self.current_orig.copy()
+            self.setProgModified(modified=False, sendmidi=True)
+        elif self.current_modi:
+            self.current = self.current_modi
+            self.setProgModified(modified=True, sendmidi=True)
+
+    def setProgModified(self, modified=True, sendmidi=False):
         self.is_modified = modified
         for func in self.prgchng_lst:
             func()
         if sendmidi and self.midiint.isOpen():
-            self.midiint.sendsingleedit(prog.dump)
-
-    def setProgModified(self):
-        self.is_modified = True
-        for func in self.prgchng_lst:
-            func()
+            self.midiint.sendsingleedit(self.current.dump)
 
     def isProgModified(self):
         return self.is_modified

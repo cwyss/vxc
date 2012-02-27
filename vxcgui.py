@@ -1394,7 +1394,7 @@ class vxcFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.onNextProg, item)
         item = menu.Append(-1, 'Prev\tctrl-p')
         self.Bind(wx.EVT_MENU, self.onPrevProg, item)
-        item = menu.Append(-1, 'Revert')
+        item = menu.Append(-1, 'Revert\tctrl-v')
         self.Bind(wx.EVT_MENU, self.onRevert, item)
         item = menu.Append(-1, 'Store')
         self.Bind(wx.EVT_MENU, self.onStore, item)
@@ -1531,7 +1531,7 @@ class vxcFrame(wx.Frame):
         self.limitdialog.Show()
 
     def onRevert(self, evt):
-        pass
+        self.interface.revertProg()
     def onStore(self, evt):
         pass
 
