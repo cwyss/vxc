@@ -214,9 +214,9 @@ class ProgLibrary(object):
             self.nolimit = False
         else:
             self.ctrlcond = []
+        currprog = self.getProg(self.current_prog, self.current_bank)
         self.updateVisible()
-        if self.current_bank>=len(self.visible):
-            self.current_bank = 0
+        self.resetCurrent(currprog)
         self.libChange(PL_LIBCHNG)
 
     def matchCond(self, prog, cc):
@@ -246,19 +246,13 @@ class ProgLibrary(object):
         return b1 and bool(re.match(self.namepat, prog.name.lower()))
 
     def updateVisible(self):
-        currprog = self.getProg(self.current_prog, self.current_bank)
         self.visible = []
-        self.current_prog = 0
-        self.current_bank = 0
         self.visProgCnt = 0
         for bi,bank in enumerate(self.banks):
             bv = []
             for pi,prog in enumerate(bank.progs):
                 if self.nolimit or self.matchProg(prog):
                     bv.append(pi)
-                    if currprog==prog:
-                        self.current_bank = len(self.visible)
-                        self.current_prog = len(bv)-1
             if self.nolimit or len(bv)>0:
                 self.visible.append((bi,bv))
             self.visProgCnt += len(bv)
@@ -301,6 +295,18 @@ class ProgLibrary(object):
             return self.banks[bi].progs[pi]
         except IndexError:
             return None
+
+    def resetCurrent(self, prog):
+        found = False
+        for bankind,(bi,bv) in enumerate(self.visible):
+            b = self.banks[bi]
+            for progind,pi in enumerate(bv):
+                if b.progs[pi]==prog:
+                    self.current_bank = bankind
+                    self.current_prog = progind
+                    found = True
+        if not found:
+            self.setProg(0,0)
 
     def setBank(self, bank):
         self.current_bank = bank
@@ -399,11 +405,13 @@ class ProgLibrary(object):
             self.libChange(PL_NEWBANK, name)
 
     def deleteBank(self, bankind=-1):
+        currprog = self.getProg(self.current_prog, self.current_bank)
         if bankind==-1:
             bankind = self.current_bank
         if bankind<len(self.visible):
             del self.banks[self.visible[bankind][0]]
         self.updateVisible()
+        self.resetCurrent(currprog)
         self.libChange(PL_LIBCHNG)
 
     def bankDumpInit(self, name, banknr):

@@ -5,8 +5,6 @@ review program store (access via menu...):
 - append to current bank (via menu)
 - insert to other program position/bank (in ProgLib)
 
-reset active program after limiting
-
 "WhitespaceCtrl" to prevent jumping of controllers in CtrlBoxGUI
 when mode changes
 
