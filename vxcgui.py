@@ -1191,7 +1191,7 @@ class Prefs(wx.Dialog):
         wx.Dialog.__init__(self, None, title="Preferences")
 
         self.port = 'hw:1,0,1'
-        self.proglib = 'proglib.vlb'
+        self.proglib = ''
         self.ctrldef = ''
         self.midifilter = 0
 
@@ -1239,9 +1239,6 @@ class Prefs(wx.Dialog):
         self.sizer.Add(but, 0)
         but = wx.Button(self, wx.ID_OK, 'Ok')
         self.sizer.Add(but, 0)
-
-    def close(self):
-        self.Destroy()
 
     def load(self, filename='.vxcrc', tryit=False):
         try:
@@ -1300,10 +1297,12 @@ class vxcFrame(wx.Frame):
         wx.Frame.__init__(self, parent=None, title='VirusXControl',
                           size=(800,500))
         self.interface = interface
-        self.prefs = Prefs()
-        self.limitdialog = LimitDialog(interface.proglib)
         interface.addPrgChngListener(self.onProgChange)
         interface.addLibChngListener(self.onLibChange)
+        self.Bind(wx.EVT_CLOSE, self.onClose)
+
+        self.prefs = Prefs()
+        self.limitdialog = LimitDialog(interface.proglib)
 
         self.statusbar = self.CreateStatusBar()
         self.statusbar.SetFieldsCount(2)
@@ -1325,9 +1324,10 @@ class vxcFrame(wx.Frame):
         else:
             self.onProgChange()
 
-    def __del__(self):
+    def onClose(self, evt):
         self.limitdialog.Destroy()
-        self.prefs.close()
+        self.prefs.Destroy()
+        self.Destroy()
 
     def loadProgLib(self, libname):
         try:
