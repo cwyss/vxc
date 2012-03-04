@@ -688,7 +688,7 @@ class ProgLibGUI(wx.Panel):
         pl  = self.interface.proglib
         if newpart==vxcmidi.PL_LIBCHNG:
             self.banklist.Set(pl.getBankNames())
-            bankind = self.interface.proglib.getCurrentBank()
+            bankind = self.interface.proglib.getSelBank()
             self.banklist.SetSelection(bankind)
             self.updateProgList()
         elif newpart==vxcmidi.PL_NEWBANK:
@@ -726,7 +726,7 @@ class ProgLibGUI(wx.Panel):
             self.interface.storeProg(pi, bi, self.storeName)
 
     def onProgChange(self):
-        bi = self.interface.proglib.getCurrentBank()
+        bi = self.interface.proglib.getSelBank()
         if bi!=self.banklist.GetSelection():
             self.banklist.SetSelection(bi)
             self.updateProgList()
@@ -744,7 +744,7 @@ class ProgLibGUI(wx.Panel):
             if not dialog.overwrite:
                 self.storebut.SetValue(False)
                 if result==wx.ID_OK:
-                    bankind = self.interface.proglib.getCurrentBank()
+                    bankind = self.interface.proglib.getSelBank()
                     self.interface.storeProg(-1, bankind, self.storeName)
             dialog.Destroy()
 
@@ -1372,8 +1372,10 @@ class vxcFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.onPrevProg, item)
         item = menu.Append(-1, 'Revert\tctrl-v')
         self.Bind(wx.EVT_MENU, self.onRevert, item)
-        item = menu.Append(-1, 'Store')
+        item = menu.Append(-1, 'Store\tctrl-s')
         self.Bind(wx.EVT_MENU, self.onStore, item)
+        item = menu.Append(-1, 'Append\tctrl-a')
+        self.Bind(wx.EVT_MENU, self.onAppend, item)
         item = menu.Append(-1, 'Limit...\tctrl-l')
         self.Bind(wx.EVT_MENU, self.onLimit, item)
         menu.AppendSeparator()
@@ -1552,8 +1554,18 @@ class vxcFrame(wx.Frame):
 
     def onRevert(self, evt):
         self.interface.revertProg()
+
     def onStore(self, evt):
-        pass
+        name = wx.GetTextFromUser("Enter program name", "Store Program",
+                                  default_value=self.interface.current.name)
+        if name!='':
+            self.interface.storeProg(name)
+
+    def onAppend(self, evt):
+        name = wx.GetTextFromUser("Enter program name", "Append Program",
+                                  default_value=self.interface.current.name)
+        if name!='':
+            self.interface.appendProg(name)
 
     def onNotebookGoto(self, evt):
         page = self.navgotoDict[evt.GetId()]
