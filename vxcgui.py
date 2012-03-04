@@ -722,8 +722,7 @@ class ProgLibGUI(wx.Panel):
             self.interface.proglib.setProg(pi)
         else:
             self.storebut.SetValue(False)
-            bi = self.banklist.GetSelection()
-            self.interface.storeProg(pi, bi, self.storeName)
+            self.interface.storeProg(self.storeName, pi)
 
     def onProgChange(self):
         bi = self.interface.proglib.getSelBank()
@@ -738,15 +737,14 @@ class ProgLibGUI(wx.Panel):
 
     def onStore(self, evt):
         if self.storebut.GetValue()==True:
-            dialog = StoreDialog(self.interface.current.name)
-            result = dialog.ShowModal()
-            self.storeName = dialog.name.GetValue()
-            if not dialog.overwrite:
+            name = self.interface.current.name
+            name = wx.GetTextFromUser("Enter program name", 
+                                      "Store program to...",
+                                      default_value=name)
+            if name!='':
+                self.storeName = name
+            else:
                 self.storebut.SetValue(False)
-                if result==wx.ID_OK:
-                    bankind = self.interface.proglib.getSelBank()
-                    self.interface.storeProg(-1, bankind, self.storeName)
-            dialog.Destroy()
 
 
 class ReadBankDialog(wx.Dialog):
