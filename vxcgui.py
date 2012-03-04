@@ -1370,10 +1370,14 @@ class vxcFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.onPrevProg, item)
         item = menu.Append(-1, 'Revert\tctrl-v')
         self.Bind(wx.EVT_MENU, self.onRevert, item)
+        menu.AppendSeparator()
         item = menu.Append(-1, 'Store\tctrl-s')
         self.Bind(wx.EVT_MENU, self.onStore, item)
         item = menu.Append(-1, 'Append\tctrl-a')
         self.Bind(wx.EVT_MENU, self.onAppend, item)
+        item = menu.Append(-1, 'Delete\tctrl-d')
+        self.Bind(wx.EVT_MENU, self.onDelete, item)
+        menu.AppendSeparator()
         item = menu.Append(-1, 'Limit...\tctrl-l')
         self.Bind(wx.EVT_MENU, self.onLimit, item)
         menu.AppendSeparator()
@@ -1552,6 +1556,8 @@ class vxcFrame(wx.Frame):
 
     def onRevert(self, evt):
         self.interface.revertProg()
+    def onDelete(self, evt):
+        self.interface.proglib.deleteProg()
 
     def onStore(self, evt):
         name = wx.GetTextFromUser("Enter program name", "Store Program",

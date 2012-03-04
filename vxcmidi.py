@@ -318,17 +318,20 @@ class ProgLibrary(object):
             bank = self.sel_bank
         else:
             self.sel_bank = bank
-        self.currprog_bankind = bank
-        self.currprog_ind = prog
-        try:
+
+        if bank<len(self.visible):
             bi,bv = self.visible[bank]
+            if len(bv)==0:
+                return
+            elif prog>=len(bv):
+                prog = len(bv)-1
+            self.currprog_bankind = bank
+            self.currprog_ind = prog
             pi = bv[prog]
             b = self.banks[bi]
             p = b.progs[pi]
             location = "%s %3d" % (b.name, pi)
             self.progChange(p, location, sendmidi=True)
-        except IndexError:
-            pass
 
     def nextProg(self):
         maxbank = len(self.visible)
@@ -482,6 +485,19 @@ class ProgLibrary(object):
             bank.progs[bv[progind]] = prog
         else:
             return
+        self.libChange(PL_BANKCHNG)
+        self.setProg(progind, bankind)
+
+    def deleteProg(self):
+        bankind = self.currprog_bankind
+        progind = self.currprog_ind
+        if bankind>=len(self.visible):
+            return
+        bi,bv = self.visible[bankind]
+        bank = self.banks[bi]
+        if progind<len(bv):
+            del bank.progs[bv[progind]]
+        self.updateVisible()
         self.libChange(PL_BANKCHNG)
         self.setProg(progind, bankind)
 
