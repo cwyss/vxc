@@ -1,3 +1,6 @@
+short term goals
+================
+
 keyboard control for notebook tabs and controllers
 
 review program store (access via menu...):
@@ -10,7 +13,26 @@ when mode changes
 
 in CtrlPage arrange CtrlBoxes in columns 
 
-load/save programs and banks in SysEx and Midi format
+show original value of controller as saved in program
 
+bank modified state
+
+
+mid term goals
+==============
+
+load proglib appends to the existing banks
+
+import/export programs and banks in SysEx and Midi format
+
+save/export selection of banks
+
+load selected bank from program library
+
+
+long term goals
+===============
 
 multi patch support
+
+sequencer feature
