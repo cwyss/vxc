@@ -1,17 +1,12 @@
 short term goals
 ================
 
-keyboard control for notebook tabs and controllers
-
-review program store (access via menu...):
-- store to current program position (via menu)
-- append to current bank (via menu)
-- insert to other program position/bank (in ProgLib)
+keyboard access to controllers
 
 "WhitespaceCtrl" to prevent jumping of controllers in CtrlBoxGUI
 when mode changes
 
-in CtrlPage arrange CtrlBoxes in columns 
+in CtrlPage, arrange CtrlBoxes in columns 
 
 show original value of controller as saved in program
 

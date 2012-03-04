@@ -456,15 +456,16 @@ class CtrlPageGUI(wx.Panel):
 
 class ControllersGUI(object):
     def __init__(self, notebook, interface):
+        self.notebook = notebook
         self.interface = interface
         interface.addPrgChngListener(self.onProgChange)
 
-    def setup(self, notebook, ctrlpages):
+    def setup(self, ctrlpages):
         self.pages = []
         try:
             for pagedef in ctrlpages.pages:
-                page = CtrlPageGUI(notebook, self.interface, pagedef)
-                notebook.AddPage(page, pagedef.name)
+                page = CtrlPageGUI(self.notebook, self.interface, pagedef)
+                self.notebook.AddPage(page, pagedef.name)
                 self.pages.append(page)
         except StandardError as error:
             raise
@@ -670,7 +671,9 @@ class ProgLibGUI(wx.Panel):
         
         butsizer = wx.BoxSizer(wx.HORIZONTAL)
         self.storebut = wx.ToggleButton(self, -1, 'Store')
-        butsizer.Add(self.storebut, 0, wx.LEFT|wx.RIGHT, 20)
+        butsizer.Add(self.storebut, 0)
+        self.movebut = wx.ToggleButton(self, -1, 'Move')
+        butsizer.Add(self.movebut, 0)
         leftsizer.Add(butsizer, 0, flag=wx.EXPAND)
 
         self.sizer.Add(leftsizer, 0, flag=wx.EXPAND)
@@ -687,7 +690,7 @@ class ProgLibGUI(wx.Panel):
         pl  = self.interface.proglib
         if newpart==vxcmidi.PL_LIBCHNG:
             self.banklist.Set(pl.getBankNames())
-            bankind = self.interface.proglib.getCurrentBank()
+            bankind = self.interface.proglib.getSelBank()
             self.banklist.SetSelection(bankind)
             self.updateProgList()
         elif newpart==vxcmidi.PL_NEWBANK:
@@ -717,15 +720,17 @@ class ProgLibGUI(wx.Panel):
 
     def onProgSel(self, evt):
         pi = evt.GetIndex()
-        if self.storebut.GetValue()==False:
-            self.interface.proglib.setProg(pi)
-        else:
+        if self.storebut.GetValue()==True:
             self.storebut.SetValue(False)
-            bi = self.banklist.GetSelection()
-            self.interface.storeProg(pi, bi, self.storeName)
+            self.interface.storeProg(self.storeName, pi)
+        elif self.movebut.GetValue()==True:
+            self.movebut.SetValue(False)
+            self.interface.proglib.moveProg(pi)
+        else:
+            self.interface.proglib.setProg(pi)
 
     def onProgChange(self):
-        bi = self.interface.proglib.getCurrentBank()
+        bi = self.interface.proglib.getSelBank()
         if bi!=self.banklist.GetSelection():
             self.banklist.SetSelection(bi)
             self.updateProgList()
@@ -737,15 +742,14 @@ class ProgLibGUI(wx.Panel):
 
     def onStore(self, evt):
         if self.storebut.GetValue()==True:
-            dialog = StoreDialog(self.interface.current.name)
-            result = dialog.ShowModal()
-            self.storeName = dialog.name.GetValue()
-            if not dialog.overwrite:
+            name = self.interface.current.name
+            name = wx.GetTextFromUser("Enter program name", 
+                                      "Store program to...",
+                                      default_value=name)
+            if name!='':
+                self.storeName = name
+            else:
                 self.storebut.SetValue(False)
-                if result==wx.ID_OK:
-                    bankind = self.interface.proglib.getCurrentBank()
-                    self.interface.storeProg(-1, bankind, self.storeName)
-            dialog.Destroy()
 
 
 class ReadBankDialog(wx.Dialog):
@@ -1310,12 +1314,12 @@ class vxcFrame(wx.Frame):
         self.createMenu()
 
         self.notebook = wx.Notebook(self)
+        print "proglibGUI"
+        self.proglib = ProgLibGUI(self.notebook, interface)
         print "ctrlpages"
         self.initCtrlPages()
         print "controllersGUI"
         self.controllers = ControllersGUI(self.notebook, interface)
-        print "proglibGUI"
-        self.proglib = ProgLibGUI(self.notebook, interface)
         self.setupNotebook()
 
         print "proglib"
@@ -1328,32 +1332,6 @@ class vxcFrame(wx.Frame):
         self.limitdialog.Destroy()
         self.prefs.Destroy()
         self.Destroy()
-
-    def loadProgLib(self, libname):
-        try:
-            self.interface.proglib.loadFromFile(libname)
-        except vxcmidi.ProgLibError as error:
-            showError(str(error))
-        except IOError as error:
-            showError('Error reading program library.\n' +
-                      error.strerror+': '+error.filename)
-
-    def initCtrlPages(self):
-        self.ctrlpages = vxcctrl.CtrlPages()
-        if len(self.prefs.ctrldef)>0:
-            try:
-                self.ctrlpages.loadFromFile(self.prefs.ctrldef)
-            except IOError as error:
-                showError('Error reading controller definitions.\n' +
-                          "%s: '%s'" % (error.strerror, error.filename))
-        else:
-            self.ctrlpages.init2()
-
-    def setupNotebook(self):
-        while self.notebook.GetPageCount()>0:
-            self.notebook.RemovePage(0)
-        self.controllers.setup(self.notebook, self.ctrlpages)
-        self.notebook.AddPage(self.proglib, 'Library')
 
     def onProgChange(self):
         if self.interface.isProgModified()==True:
@@ -1372,6 +1350,7 @@ class vxcFrame(wx.Frame):
 
     def setMidiMsg(self, midimsg):
         self.statusbar.SetStatusText(midimsg, 1)
+
 
     def createMenu(self):
         menubar = wx.MenuBar()
@@ -1396,8 +1375,14 @@ class vxcFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.onPrevProg, item)
         item = menu.Append(-1, 'Revert\tctrl-v')
         self.Bind(wx.EVT_MENU, self.onRevert, item)
-        item = menu.Append(-1, 'Store')
+        menu.AppendSeparator()
+        item = menu.Append(-1, 'Store\tctrl-s')
         self.Bind(wx.EVT_MENU, self.onStore, item)
+        item = menu.Append(-1, 'Append\tctrl-a')
+        self.Bind(wx.EVT_MENU, self.onAppend, item)
+        item = menu.Append(-1, 'Delete\tctrl-d')
+        self.Bind(wx.EVT_MENU, self.onDelete, item)
+        menu.AppendSeparator()
         item = menu.Append(-1, 'Limit...\tctrl-l')
         self.Bind(wx.EVT_MENU, self.onLimit, item)
         menu.AppendSeparator()
@@ -1427,6 +1412,50 @@ class vxcFrame(wx.Frame):
         menubar.Append(menu, '&Library')
 
         self.SetMenuBar(menubar)
+
+    def setupNavigateMenu(self):
+        menu = wx.Menu()
+        self.navgotoDict = {}
+        for i in range(self.notebook.GetPageCount()):
+            name = self.notebook.GetPageText(i) + '\tF%d' % (i+1)
+            item = menu.Append(-1, name)
+            self.Bind(wx.EVT_MENU, self.onNotebookGoto, item)
+            self.navgotoDict[item.GetId()] = i
+
+        menubar = self.GetMenuBar()
+        oldpos = menubar.FindMenu("Navigate")
+        if oldpos!=wx.NOT_FOUND:
+            menubar.Replace(oldpos, menu, '&Navigate')
+        else:
+            menubar.Append(menu, '&Navigate')
+
+    def initCtrlPages(self):
+        self.ctrlpages = vxcctrl.CtrlPages()
+        if len(self.prefs.ctrldef)>0:
+            try:
+                self.ctrlpages.loadFromFile(self.prefs.ctrldef)
+            except IOError as error:
+                showError('Error reading controller definitions.\n' +
+                          "%s: '%s'" % (error.strerror, error.filename))
+        else:
+            self.ctrlpages.init2()
+
+    def setupNotebook(self):
+        while self.notebook.GetPageCount()>0:
+            self.notebook.RemovePage(0)
+        self.notebook.AddPage(self.proglib, 'Library')
+        self.controllers.setup(self.ctrlpages)
+        self.setupNavigateMenu()
+
+    def loadProgLib(self, libname):
+        try:
+            self.interface.proglib.loadFromFile(libname)
+        except vxcmidi.ProgLibError as error:
+            showError(str(error))
+        except IOError as error:
+            showError('Error reading program library.\n' +
+                      error.strerror+': '+error.filename)
+
 
     def onConnect(self, evt):
         if self.GetMenuBar().IsChecked(evt.GetId()):
@@ -1532,8 +1561,24 @@ class vxcFrame(wx.Frame):
 
     def onRevert(self, evt):
         self.interface.revertProg()
+    def onDelete(self, evt):
+        self.interface.proglib.deleteProg()
+
     def onStore(self, evt):
-        pass
+        name = wx.GetTextFromUser("Enter program name", "Store Program",
+                                  default_value=self.interface.current.name)
+        if name!='':
+            self.interface.storeProg(name)
+
+    def onAppend(self, evt):
+        name = wx.GetTextFromUser("Enter program name", "Append Program",
+                                  default_value=self.interface.current.name)
+        if name!='':
+            self.interface.appendProg(name)
+
+    def onNotebookGoto(self, evt):
+        page = self.navgotoDict[evt.GetId()]
+        self.notebook.ChangeSelection(page)
 
 
 class vxcGUI(object):

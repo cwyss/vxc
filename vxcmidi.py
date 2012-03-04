@@ -190,8 +190,9 @@ class ProgLibrary(object):
         self.progChange = progChange
         self.libChange = libChange
         self.visible = []
-        self.current_bank = 0
-        self.current_prog = 0
+        self.currprog_bankind = 0
+        self.currprog_ind = 0
+        self.sel_bank = 0
         self.nolimit = True
         self.visProgCnt = 0
 
@@ -214,7 +215,7 @@ class ProgLibrary(object):
             self.nolimit = False
         else:
             self.ctrlcond = []
-        currprog = self.getProg(self.current_prog, self.current_bank)
+        currprog = self.getProg(self.currprog_ind, self.currprog_bankind)
         self.updateVisible()
         self.resetCurrent(currprog)
         self.libChange(PL_LIBCHNG)
@@ -266,10 +267,10 @@ class ProgLibrary(object):
         self.visProgCnt += 1
         return len(bv)-1
 
-    def getCurrentBank(self):
-        return self.current_bank
+    def getSelBank(self):
+        return self.sel_bank
     def getCurrentProg(self):
-        return self.current_prog
+        return self.currprog_ind
 
     def getVisibleInfo(self):
         return (self.visProgCnt, len(self.visible), self.nolimit)
@@ -296,39 +297,48 @@ class ProgLibrary(object):
         except IndexError:
             return None
 
-    def resetCurrent(self, prog):
+    def resetCurrent(self, prog, updatelocation=False):
         found = False
         for bankind,(bi,bv) in enumerate(self.visible):
             b = self.banks[bi]
             for progind,pi in enumerate(bv):
                 if b.progs[pi]==prog:
-                    self.current_bank = bankind
-                    self.current_prog = progind
+                    self.currprog_bankind = bankind
+                    self.sel_bank = bankind
+                    self.currprog_ind = progind
                     found = True
+                    if updatelocation:
+                        location = "%s %3d" % (b.name, pi)
+                        self.progChange(prog, location)
         if not found:
             self.setProg(0,0)
 
     def setBank(self, bank):
-        self.current_bank = bank
+        self.sel_bank = bank
 
     def setProg(self, prog, bank=-1):
         if bank==-1:
-            bank = self.current_bank
-        self.current_bank = bank
-        self.current_prog = prog
-        try:
+            bank = self.sel_bank
+        else:
+            self.sel_bank = bank
+
+        if bank<len(self.visible):
             bi,bv = self.visible[bank]
+            if len(bv)==0:
+                return
+            elif prog>=len(bv):
+                prog = len(bv)-1
+            self.currprog_bankind = bank
+            self.currprog_ind = prog
             pi = bv[prog]
             b = self.banks[bi]
             p = b.progs[pi]
             location = "%s %3d" % (b.name, pi)
             self.progChange(p, location, sendmidi=True)
-        except IndexError:
-            pass
 
     def nextProg(self):
         maxbank = len(self.visible)
-        prog,bank = (self.current_prog, self.current_bank)
+        prog,bank = (self.currprog_ind, self.currprog_bankind)
         prog += 1
         while bank<maxbank:
             bi,bv = self.visible[bank]
@@ -341,7 +351,7 @@ class ProgLibrary(object):
             self.setProg(prog, bank)
 
     def prevProg(self):
-        prog,bank = (self.current_prog, self.current_bank)
+        prog,bank = (self.currprog_ind, self.currprog_bankind)
         if bank>=len(self.visible):
             bank = len(self.visible)-1
             if bank<0:
@@ -405,9 +415,9 @@ class ProgLibrary(object):
             self.libChange(PL_NEWBANK, name)
 
     def deleteBank(self, bankind=-1):
-        currprog = self.getProg(self.current_prog, self.current_bank)
+        currprog = self.getProg(self.currprog_ind, self.currprog_bankind)
         if bankind==-1:
-            bankind = self.current_bank
+            bankind = self.sel_bank
         if bankind<len(self.visible):
             del self.banks[self.visible[bankind][0]]
         self.updateVisible()
@@ -460,19 +470,61 @@ class ProgLibrary(object):
                 self.libChange(PL_BANKCHNG, bank.progs[-1].name)
         return self.bankdumpmiss
 
-    def storeProg(self, prog, progind, bankind, name):
+    def storeProg(self, prog, name, progind=None, append=False):
         prog.setName(name)
+        if not append and progind==None:
+            progind = self.currprog_ind
+            bankind = self.currprog_bankind
+        else:
+            bankind = self.sel_bank
         if bankind>=len(self.visible):
             return
         bi,bv = self.visible[bankind]
         bank = self.banks[bi]
-        if progind>=0 and progind<len(bv):
-            bank.progs[bv[progind]] = prog
-        else:
+        if append:
             bank.progs.append(prog)
             progind = self.appendVisible(bankind)
+        elif progind<len(bv):
+            bank.progs[bv[progind]] = prog
+        else:
+            return
         self.libChange(PL_BANKCHNG)
         self.setProg(progind, bankind)
+
+    def deleteProg(self):
+        bankind = self.currprog_bankind
+        progind = self.currprog_ind
+        if bankind>=len(self.visible):
+            return
+        bi,bv = self.visible[bankind]
+        bank = self.banks[bi]
+        if progind<len(bv):
+            del bank.progs[bv[progind]]
+            self.updateVisible()
+            self.libChange(PL_LIBCHNG)
+            self.setProg(progind, bankind)
+
+    def moveProg(self, progind, bankind=-1):
+        if bankind==-1:
+            bankind = self.sel_bank
+        oldbankind = self.currprog_bankind
+        oldprogind = self.currprog_ind
+        if oldbankind>=len(self.visible) or bankind>=len(self.visible):
+            return
+        obi,obv = self.visible[oldbankind]
+        bi,bv = self.visible[bankind]
+        if oldprogind>=len(obv) or progind>=len(bv):
+            return
+        oldbank = self.banks[obi]
+        prog = oldbank.progs.pop(obv[oldprogind])
+        bank = self.banks[bi]
+        if oldbank==bank and oldprogind<progind:
+            bank.progs.insert(bv[progind]-1, prog)
+        else:
+            bank.progs.insert(bv[progind], prog)
+        self.updateVisible()
+        self.libChange(PL_LIBCHNG)
+        self.resetCurrent(prog, updatelocation=True)
 
 
 
@@ -546,8 +598,11 @@ class ProgInterface(object):
     def isProgModified(self):
         return self.is_modified
 
-    def storeProg(self, prognr, banknr, name):
-        self.proglib.storeProg(self.current.copy(), prognr, banknr, name)
+    def storeProg(self, name, progind=None):
+        self.proglib.storeProg(self.current.copy(), name, progind)
+
+    def appendProg(self, name):
+        self.proglib.storeProg(self.current.copy(), name, append=True)
 
     def addLibChngListener(self, func):
         self.libchng_lst.append(func)
