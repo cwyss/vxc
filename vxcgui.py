@@ -671,7 +671,9 @@ class ProgLibGUI(wx.Panel):
         
         butsizer = wx.BoxSizer(wx.HORIZONTAL)
         self.storebut = wx.ToggleButton(self, -1, 'Store')
-        butsizer.Add(self.storebut, 0, wx.LEFT|wx.RIGHT, 20)
+        butsizer.Add(self.storebut, 0)
+        self.movebut = wx.ToggleButton(self, -1, 'Move')
+        butsizer.Add(self.movebut, 0)
         leftsizer.Add(butsizer, 0, flag=wx.EXPAND)
 
         self.sizer.Add(leftsizer, 0, flag=wx.EXPAND)
@@ -718,11 +720,14 @@ class ProgLibGUI(wx.Panel):
 
     def onProgSel(self, evt):
         pi = evt.GetIndex()
-        if self.storebut.GetValue()==False:
-            self.interface.proglib.setProg(pi)
-        else:
+        if self.storebut.GetValue()==True:
             self.storebut.SetValue(False)
             self.interface.storeProg(self.storeName, pi)
+        elif self.movebut.GetValue()==True:
+            self.movebut.SetValue(False)
+            self.interface.proglib.moveProg(pi)
+        else:
+            self.interface.proglib.setProg(pi)
 
     def onProgChange(self):
         bi = self.interface.proglib.getSelBank()

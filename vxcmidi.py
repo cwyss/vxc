@@ -297,7 +297,7 @@ class ProgLibrary(object):
         except IndexError:
             return None
 
-    def resetCurrent(self, prog):
+    def resetCurrent(self, prog, updatelocation=False):
         found = False
         for bankind,(bi,bv) in enumerate(self.visible):
             b = self.banks[bi]
@@ -307,6 +307,9 @@ class ProgLibrary(object):
                     self.sel_bank = bankind
                     self.currprog_ind = progind
                     found = True
+                    if updatelocation:
+                        location = "%s %3d" % (b.name, pi)
+                        self.progChange(prog, location)
         if not found:
             self.setProg(0,0)
 
@@ -497,9 +500,31 @@ class ProgLibrary(object):
         bank = self.banks[bi]
         if progind<len(bv):
             del bank.progs[bv[progind]]
+            self.updateVisible()
+            self.libChange(PL_LIBCHNG)
+            self.setProg(progind, bankind)
+
+    def moveProg(self, progind, bankind=-1):
+        if bankind==-1:
+            bankind = self.sel_bank
+        oldbankind = self.currprog_bankind
+        oldprogind = self.currprog_ind
+        if oldbankind>=len(self.visible) or bankind>=len(self.visible):
+            return
+        obi,obv = self.visible[oldbankind]
+        bi,bv = self.visible[bankind]
+        if oldprogind>=len(obv) or progind>=len(bv):
+            return
+        oldbank = self.banks[obi]
+        prog = oldbank.progs.pop(obv[oldprogind])
+        bank = self.banks[bi]
+        if oldbank==bank and oldprogind<progind:
+            bank.progs.insert(bv[progind]-1, prog)
+        else:
+            bank.progs.insert(bv[progind], prog)
         self.updateVisible()
-        self.libChange(PL_BANKCHNG)
-        self.setProg(progind, bankind)
+        self.libChange(PL_LIBCHNG)
+        self.resetCurrent(prog, updatelocation=True)
 
 
 
