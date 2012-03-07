@@ -564,6 +564,9 @@ class ProgInterface(object):
         llist.append(func)
         self.listeners[key] = llist
 
+    def clearAllListeners(self):
+        self.listeners = {}
+
     def notify(self, ctrlid, val):
         key = ctrlKey(ctrlid)
         for f in self.listeners.get(key, []):

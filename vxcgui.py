@@ -363,7 +363,7 @@ class CtrlBoxGUI(wx.Panel):
         box = wx.StaticBox(self, -1, blockdef.name)
         self.boxsizer = wx.StaticBoxSizer(box, wx.VERTICAL)
         self.SetSizer(self.boxsizer)
-        self.sizer = wx.FlexGridSizer(cols=2, hgap=5, vgap=5)
+        self.sizer = wx.FlexGridSizer(cols=2, hgap=5, vgap=1)
         self.sizer.AddGrowableCol(1)
         self.boxsizer.Add(self.sizer, 0, wx.EXPAND)
 
@@ -382,6 +382,7 @@ class CtrlBoxGUI(wx.Panel):
             vxcctrl.CT_CHECKBOX: CheckCtrlGUI,
             vxcctrl.CT_NEGATIVE: NegCtrlGUI,
             }
+        self.h = [0]*8
         for cdef in blockdef.ctrldefs:
             self.buildCtrl(cdef)
 
@@ -402,28 +403,38 @@ class CtrlBoxGUI(wx.Panel):
                 self.mode = self.blockdef.valrange[0]
 
     def buildCtrl(self, cdef):
-        ctrl = self.ctrlguidict[cdef.ctype](self, self.interface, cdef)
+        if cdef.ctype!=vxcctrl.CT_SEPARATOR:
+            ctrl = self.ctrlguidict[cdef.ctype](self, self.interface, cdef)
+        else:
+            ctrl = wx.StaticLine(self)
+        ctrl.Fit()
+        for m in cdef.modes:
+            self.h[m] += ctrl.GetSize()[1]
         centry = (cdef, ctrl)
         self.controllers.append(centry)
         self.updateCtrl(centry)
 
     def updateCtrl(self, centry):
         cdef,ctrl = centry
-        if self.modetype==vxcctrl.MODE_NONE \
-                or self.mode in cdef.modes:
-            ctrl.setVal(self.interface.getCtrl(cdef.cid))
-            ctrl.Show()
-            self.sizer.Add(ctrl.label, 0, 
-                           wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
-            self.sizer.Add(ctrl, 0, wx.EXPAND)
+        if cdef.ctype!=vxcctrl.CT_SEPARATOR:
+            if self.modetype==vxcctrl.MODE_NONE \
+                    or self.mode in cdef.modes:
+                ctrl.setVal(self.interface.getCtrl(cdef.cid))
+                ctrl.Show()
+                self.sizer.Add(ctrl.label, 0, 
+                               wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
+                self.sizer.Add(ctrl, 0, wx.EXPAND)
+            else:
+                ctrl.Hide()
         else:
-            ctrl.Hide()
+            self.sizer.Add((1,1))
+            self.sizer.Add(ctrl, 0, wx.EXPAND)
 
     def updateActive(self):
         self.sizer.Clear()
         for centry in self.controllers:
             self.updateCtrl(centry)
-        self.boxsizer.SetSizeHints(self)
+ #       self.boxsizer.SetSizeHints(self)
 
     def update(self):
         self.updateMode()
@@ -432,7 +443,12 @@ class CtrlBoxGUI(wx.Panel):
     def onMode(self, val):
         self.updateMode(val)
         self.updateActive()
+        h0 = 0
+        for cdef,ctrl in self.controllers:
+            if self.mode in cdef.modes:
+                h0 += ctrl.GetSize()[1]
         self.pagegui.Layout()
+        print self.blockdef.name, self.sizer.GetSize(), self.h[self.mode], h0
 
 
 class CtrlPageGUI(wx.Panel):
@@ -462,6 +478,7 @@ class ControllersGUI(object):
 
     def setup(self, ctrlpages):
         self.pages = []
+        self.interface.clearAllListeners()
         try:
             for pagedef in ctrlpages.pages:
                 page = CtrlPageGUI(self.notebook, self.interface, pagedef)
@@ -881,7 +898,7 @@ class CtrlDefDialog(wx.Dialog):
                                choices=['Standard','List', 'Shape',
                                         'Prefix', 'Sign', 'SignPercent',
                                         'SignLabel', 'Percent', 'Interpol', 
-                                        'Checkbox', 'Negative'])
+                                        'Checkbox', 'Negative', 'Sepatator'])
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(label, 0, wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, 5)
         sizer.Add(self.ctype, 0)

@@ -19,6 +19,7 @@ CT_PERCENT = 7    # valinfo[0]=minpercent, valinfo[1]=maxpercent
 CT_INTERPOL = 8   # valinfo[i]='fltval VALUE'
 CT_CHECKBOX = 9
 CT_NEGATIVE = 10
+CT_SEPARATOR = 11
 
 class CtrlDef(object):
     def __init__(self, name='', ctype=CT_STD, valrange=(0,127), 
