@@ -1,6 +1,8 @@
 short term goals
 ================
 
+check modes to be valid, in range of blockdef
+
 keyboard access to controllers
 
 "WhitespaceCtrl" to prevent jumping of controllers in CtrlBoxGUI

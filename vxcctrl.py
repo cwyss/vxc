@@ -115,6 +115,15 @@ class BlockDef(object):
             number = self.cid[1]
         self.cid = (page, number)
 
+    def getNumModes(self):
+        if self.modetype==MODE_STD:
+            return self.valrange[1]-self.valrange[0]+1
+        elif self.modetype==MODE_OPENEND:
+            return self.valrange[0]+1
+        else:
+            return 0
+
+
 BDEF_NAME = 0
 BDEF_MODE = 1
 BDEF_CTRL = 2
@@ -524,7 +533,8 @@ class CtrlBoxGUI(wx.Panel):
         box = wx.StaticBox(self, -1, blockdef.name)
         self.boxsizer = wx.StaticBoxSizer(box, wx.VERTICAL)
         self.SetSizer(self.boxsizer)
-        self.sizer = wx.FlexGridSizer(cols=2, hgap=5, vgap=1)
+        self.vgap = 4
+        self.sizer = wx.FlexGridSizer(cols=2, hgap=5, vgap=self.vgap)
         self.sizer.AddGrowableCol(1)
         self.boxsizer.Add(self.sizer, 0, wx.EXPAND)
 
@@ -543,7 +553,7 @@ class CtrlBoxGUI(wx.Panel):
             CT_CHECKBOX: CheckCtrlGUI,
             CT_NEGATIVE: NegCtrlGUI,
             }
-        self.h = [0]*8
+        self.vsize = [0]*self.blockdef.getNumModes()
         for cdef in blockdef.ctrldefs:
             self.buildCtrl(cdef)
 
@@ -570,7 +580,7 @@ class CtrlBoxGUI(wx.Panel):
             ctrl = wx.StaticLine(self)
         ctrl.Fit()
         for m in cdef.modes:
-            self.h[m] += ctrl.GetSize()[1]
+            self.vsize[m] += ctrl.GetSize()[1]+self.vgap
         centry = (cdef, ctrl)
         self.controllers.append(centry)
         self.updateCtrl(centry)
@@ -607,9 +617,10 @@ class CtrlBoxGUI(wx.Panel):
         h0 = 0
         for cdef,ctrl in self.controllers:
             if self.mode in cdef.modes:
-                h0 += ctrl.GetSize()[1]
+                h0 += ctrl.GetSize()[1]+self.vgap
         self.pagegui.Layout()
-        print self.blockdef.name, self.sizer.GetSize(), self.h[self.mode], h0
+        print self.blockdef.name, self.sizer.GetSize(), \
+            self.vsize[self.mode], h0
 
 
 class CtrlPageGUI(wx.Panel):
