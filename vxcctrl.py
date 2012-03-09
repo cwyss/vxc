@@ -579,8 +579,9 @@ class CtrlBoxGUI(wx.Panel):
         else:
             ctrl = wx.StaticLine(self)
         ctrl.Fit()
-        for m in cdef.modes:
-            self.vsize[m] += ctrl.GetSize()[1]+self.vgap
+        for m in range(self.blockdef.getNumModes()):
+            if m in cdef.modes:
+                self.vsize[m] += ctrl.GetSize()[1]+self.vgap
         centry = (cdef, ctrl)
         self.controllers.append(centry)
         self.updateCtrl(centry)
