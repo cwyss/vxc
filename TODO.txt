@@ -21,6 +21,11 @@ save/export selection of banks
 
 load selected bank from program library
 
+"muting"/disabling of controler sections, e.g. disable all effects
+
+minimum size for window or scrollable area in tabs to show
+ListCtrlGUIs entirely in all modes
+
 
 long term goals
 ===============

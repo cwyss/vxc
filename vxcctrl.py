@@ -263,7 +263,7 @@ class SignCtrlGUI(StdCtrlGUI):
         self.valtext.SetLabel(str(val))
 
     def getValSpareText(self):
-        return '-64'
+        return '127'
 
 class SignPercentCtrlGUI(StdCtrlGUI):
     def __init__(self, parent, interface, cdef):
@@ -490,7 +490,7 @@ class ListCtrlGUI(CtrlGUI):
     def __init__(self, parent, interface, cdef):
         CtrlGUI.__init__(self, parent, interface, cdef)
 
-        lbls = [cdef.valinfo.get(i,'') 
+        lbls = [('%d:  ' % i) + cdef.valinfo.get(i,'') 
                 for i in range(cdef.valrange[0], cdef.valrange[1]+1)]
         self.choice = wx.Choice(self, -1, choices=lbls)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -522,12 +522,14 @@ class CheckCtrlGUI(CtrlGUI):
     def setVal(self, val):
         self.checkbox.SetValue(val)
 
+
 class SeparatorGUI(wx.StaticLine):
     def __init__(self, parent, gaps):
         wx.StaticLine.__init__(self, parent)
         self.gaps = gaps
     def getGap(self, mode):
         return self.gaps[mode]
+
 
 class CtrlBoxGUI(wx.Panel):
     def __init__(self, pagegui, interface, blockdef):
