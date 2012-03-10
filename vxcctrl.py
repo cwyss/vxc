@@ -744,11 +744,14 @@ class CtrlPageGUI(wx.Panel):
         for blockdef in pagedef.blocks:
             if col<pagedef.cols and cnt>=pagedef.collength.get(col,0):
                 colsizer = wx.BoxSizer(wx.VERTICAL)
-                self.sizer.Add(colsizer, 1)
+                self.sizer.Add(colsizer, 1, wx.LEFT, 4)
                 col += 1
                 cnt = 0
             box = CtrlBoxGUI(self, interface, blockdef)
-            colsizer.Add(box, 0, wx.EXPAND)
+            if cnt>=1:
+                colsizer.Add(box, 0, wx.EXPAND|wx.TOP, 4)
+            else:
+                colsizer.Add(box, 0, wx.EXPAND)
             self.boxes.append(box)
             cnt += 1
                 
