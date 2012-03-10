@@ -121,7 +121,7 @@ class BlockDef(object):
         elif self.modetype==MODE_OPENEND:
             return self.valrange[0]+1
         else:
-            return 0
+            return 1
 
 
 BDEF_NAME = 0
@@ -522,6 +522,12 @@ class CheckCtrlGUI(CtrlGUI):
     def setVal(self, val):
         self.checkbox.SetValue(val)
 
+class SeparatorGUI(wx.StaticLine):
+    def __init__(self, parent, gaps):
+        wx.StaticLine.__init__(self, parent)
+        self.gaps = gaps
+    def getGap(self, mode):
+        return self.gaps[mode]
 
 class CtrlBoxGUI(wx.Panel):
     def __init__(self, pagegui, interface, blockdef):
@@ -576,12 +582,14 @@ class CtrlBoxGUI(wx.Panel):
     def buildCtrl(self, cdef):
         if cdef.ctype!=CT_SEPARATOR:
             ctrl = self.ctrlguidict[cdef.ctype](self, self.interface, cdef)
+            ctrl.Fit()
+            for m in range(self.blockdef.getNumModes()):
+                if m in cdef.modes:
+                    self.vsize[m] += ctrl.GetSize()[1]+self.vgap
         else:
-            ctrl = wx.StaticLine(self)
-        ctrl.Fit()
-        for m in range(self.blockdef.getNumModes()):
-            if m in cdef.modes:
-                self.vsize[m] += ctrl.GetSize()[1]+self.vgap
+            maxsize = max(self.vsize)
+            ctrl = SeparatorGUI(self, [maxsize-s for s in self.vsize])
+            self.vsize = [0]*self.blockdef.getNumModes()
         centry = (cdef, ctrl)
         self.controllers.append(centry)
         self.updateCtrl(centry)
@@ -600,7 +608,7 @@ class CtrlBoxGUI(wx.Panel):
                 ctrl.Hide()
         else:
             self.sizer.Add((1,1))
-            self.sizer.Add(ctrl, 0, wx.EXPAND)
+            self.sizer.Add(ctrl, 0, wx.EXPAND|wx.TOP, ctrl.getGap(self.mode))
 
     def updateActive(self):
         self.sizer.Clear()
@@ -615,13 +623,7 @@ class CtrlBoxGUI(wx.Panel):
     def onMode(self, val):
         self.updateMode(val)
         self.updateActive()
-        h0 = 0
-        for cdef,ctrl in self.controllers:
-            if self.mode in cdef.modes:
-                h0 += ctrl.GetSize()[1]+self.vgap
         self.pagegui.Layout()
-        print self.blockdef.name, self.sizer.GetSize(), \
-            self.vsize[self.mode], h0
 
 
 class CtrlPageGUI(wx.Panel):

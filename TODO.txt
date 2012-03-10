@@ -3,9 +3,6 @@ short term goals
 
 keyboard access to controllers
 
-"WhitespaceCtrl" to prevent jumping of controllers in CtrlBoxGUI
-when mode changes
-
 in CtrlPage, arrange CtrlBoxes in columns 
 
 show original value of controller as saved in program
