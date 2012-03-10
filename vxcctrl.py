@@ -19,6 +19,7 @@ CT_INTERPOL = 8   # valinfo[i]='fltval VALUE'
 CT_CHECKBOX = 9
 CT_NEGATIVE = 10
 CT_SEPARATOR = 11
+CT_PREFIXLIST = 12 # valinfo like for CT_PREFIX
 
 class CtrlDef(object):
     def __init__(self, name='', ctype=CT_STD, valrange=(0,127), 
@@ -505,6 +506,38 @@ class ListCtrlGUI(CtrlGUI):
     def setVal(self, val):
         self.choice.SetSelection(val)
 
+class PrefixListCtrlGUI(CtrlGUI):
+    def __init__(self, parent, interface, cdef):
+        CtrlGUI.__init__(self, parent, interface, cdef)
+
+        self.choice = wx.Choice(self, -1, choices=self.makeLabels())
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer.Add(self.choice,0)
+        self.SetSizer(sizer)
+#        sizer.SetSizeHints(self)
+        self.Bind(wx.EVT_CHOICE, self.onChoice)
+
+    def makeLabels(self):
+        try:
+            prefixind = self.cdef.valrange[0]
+            labels = [('%d:  ' % i) + self.cdef.valinfo.get(i,'')
+                           for i in range(prefixind)]
+            template = self.cdef.valinfo.get(prefixind, 'x 0').split()
+            offset = int(template[1])-prefixind
+            labels.extend(['%d:  %s %d' % (i,template[0],i+offset)
+                           for i in range(prefixind, self.cdef.valrange[1]+1)])
+        except IndexError as error:
+            labels = ['']
+            showError("While setting up PrefixListCtrlGUI %s:\n%s" \
+                          % (self.cdef.name, str(error)))
+        return labels
+
+    def onChoice(self, evt):
+        self.onGUI(self.choice.GetSelection())
+
+    def setVal(self, val):
+        self.choice.SetSelection(val)
+
 class CheckCtrlGUI(CtrlGUI):
     def __init__(self, parent, interface, cdef):
         CtrlGUI.__init__(self, parent, interface, cdef)
@@ -560,6 +593,7 @@ class CtrlBoxGUI(wx.Panel):
             CT_INTERPOL: InterpolCtrlGUI,
             CT_CHECKBOX: CheckCtrlGUI,
             CT_NEGATIVE: NegCtrlGUI,
+            CT_PREFIXLIST: PrefixListCtrlGUI,
             }
         self.vsize = [0]*self.blockdef.getNumModes()
         for cdef in blockdef.ctrldefs:
@@ -741,7 +775,8 @@ class CtrlDefDialog(wx.Dialog):
                                choices=['Standard','List', 'Shape',
                                         'Prefix', 'Sign', 'SignPercent',
                                         'SignLabel', 'Percent', 'Interpol', 
-                                        'Checkbox', 'Negative', 'Sepatator'])
+                                        'Checkbox', 'Negative', 'Sepatator',
+                                        'PrefixList'])
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(label, 0, wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, 5)
         sizer.Add(self.ctype, 0)
@@ -889,7 +924,7 @@ class CtrlDefDialog(wx.Dialog):
                                 ctrldef.valrange[0], ctrldef.valrange[1])
         elif ctrldef.ctype==CT_SHAPE:
             self.setLabelsRange(ctrldef, 0, 4)
-        elif ctrldef.ctype==CT_PREFIX:
+        elif ctrldef.ctype in [CT_PREFIX,CT_PREFIXLIST]:
             self.setLabelsRange(ctrldef, 0, ctrldef.valrange[0])
         elif ctrldef.ctype==CT_SIGNLABEL:
             self.setLabelsRange(ctrldef, 0, 0)
