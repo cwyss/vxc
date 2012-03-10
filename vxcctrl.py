@@ -71,6 +71,10 @@ class CtrlDef(object):
             number = self.cid[1]
         self.cid = (page, number)
 
+    def getValInfo(self, ind):
+        return self.valinfo.get(ind, '')
+
+
 CDEF_TYPE = 1
 CDEF_NAME = 0
 CDEF_RANGE = 2
@@ -88,19 +92,18 @@ MODE_OPENEND = 2  # modes from 0 to valmin, values from valmin to valmax
 
 class BlockDef(object):
     def __init__(self, name='', modetype=MODE_NONE, cid=(vxcmidi.CTRL_A,17), 
-                 mrange=(0,0), info=None):
+                 mrange=(0,0)):
         """mrange         tuple (firstmode, lastmode)
         """
         self.name = name
         self.modetype = modetype
         self.cid = cid
         self.valrange = mrange
-        self.info = info
         self.ctrldefs = []
 
     def copy(self):
         return BlockDef(self.name, self.modetype, self.cid, 
-                        self.valrange, self.info)
+                        self.valrange)
 
     def setRange(self, min=-1, max=-1):
         if min==-1:
@@ -136,12 +139,28 @@ MDEF_INFO = 3
 
 
 class PageDef(object):
-    def __init__(self, name):
+    def __init__(self, name, cols=0, collen={}):
+        """
+        cols        number of columns with fixed number of blocks
+        collen      for each such column: number of blocks
+        """
         self.name = name
+        self.cols = cols
+        self.collength = collen
         self.blocks = []
 
     def copy(self):
-        return PageDef(self.name)
+        return PageDef(self.name, self.cols, self.collength.copy())
+
+    def getValInfo(self, col):
+        return str(self.collength.get(col, 0))
+
+    def setColLengthStr(self, col, lenstr):
+        try:
+            self.collength[col] = int(lenstr)
+        except ValueError:
+            self.collength[col] = 0
+
 
 class CtrlPages(object):
     def __init__(self):
@@ -665,14 +684,25 @@ class CtrlBoxGUI(wx.Panel):
 class CtrlPageGUI(wx.Panel):
     def __init__(self, parent, interface, pagedef):
         wx.Panel.__init__(self, parent)
+        self.boxes = []
         self.sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.SetSizer(self.sizer)
 
-        self.boxes = []
+        colsizer = wx.BoxSizer(wx.VERTICAL)
+        self.sizer.Add(colsizer, 1)
+        col = 0
+        cnt = 0
         for blockdef in pagedef.blocks:
+            if col<pagedef.cols and cnt>=pagedef.collength.get(col,0):
+                colsizer = wx.BoxSizer(wx.VERTICAL)
+                self.sizer.Add(colsizer, 1)
+                col += 1
+                cnt = 0
             box = CtrlBoxGUI(self, interface, blockdef)
-            self.sizer.Add(box, 1)
+            colsizer.Add(box, 0, wx.EXPAND)
             self.boxes.append(box)
+            cnt += 1
+                
 #        self.Layout()
 #        self.sizer.SetSizeHints(self)
 
@@ -680,6 +710,7 @@ class CtrlPageGUI(wx.Panel):
         for box in self.boxes:
             box.update()
         self.Layout()
+
 
 class ControllersGUI(object):
     def __init__(self, notebook, interface):
@@ -810,10 +841,10 @@ class CtrlDefDialog(wx.Dialog):
         sizer.Add(self.modes, 1)
         butsizer.Add(sizer, 0, wx.EXPAND|wx.TOP, 5)
 
-        self.labels = wx.ListCtrl(self, style=wx.LC_REPORT)
-        self.labels.InsertColumn(0, '#')
-        self.labels.InsertColumn(1, 'Label', width=150)
-        butsizer.Add(self.labels, 1, wx.EXPAND|wx.TOP, 5)
+        self.valinfo = wx.ListCtrl(self, style=wx.LC_REPORT)
+        self.valinfo.InsertColumn(0, '#')
+        self.valinfo.InsertColumn(1, 'ValInfo', width=150)
+        butsizer.Add(self.valinfo, 1, wx.EXPAND|wx.TOP, 5)
 
         self.name.Bind(wx.EVT_TEXT, self.onName)
         self.modetype.Bind(wx.EVT_CHOICE, self.onModeType)
@@ -823,7 +854,7 @@ class CtrlDefDialog(wx.Dialog):
         self.rangemin.Bind(wx.EVT_SPINCTRL, self.onRangeMin)
         self.rangemax.Bind(wx.EVT_SPINCTRL, self.onRangeMax)
         self.modes.Bind(wx.EVT_TEXT, self.onModes)
-        self.labels.Bind(wx.EVT_LIST_ITEM_SELECTED, self.onLabels)
+        self.valinfo.Bind(wx.EVT_LIST_ITEM_SELECTED, self.onValInfo)
 
     def setupTree(self, ctrlpages):
         rootid = self.tree.AddRoot("Pages")
@@ -877,7 +908,7 @@ class CtrlDefDialog(wx.Dialog):
         self.rangemax.SetValue(ctrldef.valrange[1])
         self.modes.Enable()
         self.modes.SetValue(ctrldef.getModeStr())
-        self.updateLabels(ctrldef)
+        self.updateValInfo(ctrldef)
     def selBlock(self, blockdef):
         self.name.Enable()
         self.name.SetValue(blockdef.name)
@@ -893,11 +924,14 @@ class CtrlDefDialog(wx.Dialog):
         self.rangemax.Enable()
         self.rangemax.SetValue(blockdef.valrange[1])
         self.modes.Disable()
-        self.disableLabels()
+        self.disableValInfo()
     def selPage(self, pagedef):
         self.selNone()
         self.name.Enable()
         self.name.SetValue(pagedef.name)
+        self.rangemin.Enable()
+        self.rangemin.SetValue(pagedef.cols)
+        self.updateValInfoPage(pagedef)
     def selNone(self):
         self.name.Disable()
         self.modetype.Disable()
@@ -907,33 +941,35 @@ class CtrlDefDialog(wx.Dialog):
         self.rangemin.Disable()
         self.rangemax.Disable()
         self.modes.Disable()
-        self.disableLabels()
+        self.disableValInfo()
 
-    def disableLabels(self):
-        self.labels.DeleteAllItems()
-        self.labels.Disable()
-    def setLabelsRange(self, ctrldef, indmin, indmax):
-        self.labels.Enable()
-        self.labels.DeleteAllItems()
+    def disableValInfo(self):
+        self.valinfo.DeleteAllItems()
+        self.valinfo.Disable()
+    def setValInfoRange(self, obj, indmin, indmax):
+        self.valinfo.Enable()
+        self.valinfo.DeleteAllItems()
         for i in range(indmin, indmax+1):
-            self.labels.InsertStringItem(i, str(i))
-            self.labels.SetStringItem(i, 1, ctrldef.valinfo.get(i,''))
-    def updateLabels(self, ctrldef):
+            self.valinfo.InsertStringItem(i, str(i))
+            self.valinfo.SetStringItem(i, 1, obj.getValInfo(i))
+    def updateValInfo(self, ctrldef):
         if ctrldef.ctype==CT_LIST:
-            self.setLabelsRange(ctrldef,
+            self.setValInfoRange(ctrldef,
                                 ctrldef.valrange[0], ctrldef.valrange[1])
         elif ctrldef.ctype==CT_SHAPE:
-            self.setLabelsRange(ctrldef, 0, 4)
+            self.setValInfoRange(ctrldef, 0, 4)
         elif ctrldef.ctype in [CT_PREFIX,CT_PREFIXLIST]:
-            self.setLabelsRange(ctrldef, 0, ctrldef.valrange[0])
+            self.setValInfoRange(ctrldef, 0, ctrldef.valrange[0])
         elif ctrldef.ctype==CT_SIGNLABEL:
-            self.setLabelsRange(ctrldef, 0, 0)
+            self.setValInfoRange(ctrldef, 0, 0)
         elif ctrldef.ctype==CT_PERCENT:
-            self.setLabelsRange(ctrldef, 0, 1)
+            self.setValInfoRange(ctrldef, 0, 1)
         elif ctrldef.ctype==CT_INTERPOL:
-            self.setLabelsRange(ctrldef, 0, 11)
+            self.setValInfoRange(ctrldef, 0, 11)
         else:
-            self.disableLabels()
+            self.disableValInfo()
+    def updateValInfoPage(self, pagedef):
+        self.setValInfoRange(pagedef, 0, pagedef.cols-1)
 
     def onName(self, evt):
         item = self.tree.GetSelection()
@@ -946,7 +982,7 @@ class CtrlDefDialog(wx.Dialog):
     def onType(self, evt):
         obj = self.tree.GetItemPyData(self.tree.GetSelection())
         obj.ctype = self.ctype.GetSelection()
-        self.updateLabels(obj)
+        self.updateValInfo(obj)
     def onIdPage(self, evt):
         obj = self.tree.GetItemPyData(self.tree.GetSelection())
         obj.setcid(page=self.idpage.GetSelection())
@@ -955,27 +991,34 @@ class CtrlDefDialog(wx.Dialog):
         obj.setcid(number=self.idnumber.GetValue())
     def onRangeMin(self, evt):
         obj = self.tree.GetItemPyData(self.tree.GetSelection())
-        obj.setRange(min=self.rangemin.GetValue())
-        if type(obj)==CtrlDef:
-            self.updateLabels(obj)
+        if type(obj) in [CtrlDef, BlockDef]:
+            obj.setRange(min=self.rangemin.GetValue())
+            if type(obj)==CtrlDef:
+                self.updateValInfo(obj)
+        elif type(obj)==PageDef:
+            obj.cols = self.rangemin.GetValue()
+            self.updateValInfoPage(obj)
     def onRangeMax(self, evt):
         obj = self.tree.GetItemPyData(self.tree.GetSelection())
         obj.setRange(max=self.rangemax.GetValue())
         if type(obj)==CtrlDef:
-            self.updateLabels(obj)
+            self.updateValInfo(obj)
     def onModes(self, evt):
         obj = self.tree.GetItemPyData(self.tree.GetSelection())
         obj.setModeStr(self.modes.GetValue())
-    def onLabels(self, evt):
+    def onValInfo(self, evt):
         ind = evt.GetIndex()
-        item = self.labels.GetItem(ind, 1)
-        dialog = wx.TextEntryDialog(None, 'Enter Label %d' % ind, 
-                                    'Edit Label',
+        item = self.valinfo.GetItem(ind, 1)
+        dialog = wx.TextEntryDialog(None, 'Enter ValInfo %d' % ind, 
+                                    'Edit ValInfo',
                                     item.GetText())
         if dialog.ShowModal()==wx.ID_OK:
-            self.labels.SetStringItem(ind, 1, dialog.GetValue())
+            self.valinfo.SetStringItem(ind, 1, dialog.GetValue())
             obj = self.tree.GetItemPyData(self.tree.GetSelection())
-            obj.valinfo[ind] = dialog.GetValue()
+            if type(obj)==CtrlDef:
+                obj.valinfo[ind] = dialog.GetValue()
+            elif type(obj)==PageDef:
+                obj.setColLengthStr(ind, dialog.GetValue())
         dialog.Destroy()
 
     def onAddChild(self, evt):
