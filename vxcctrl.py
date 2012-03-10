@@ -89,21 +89,29 @@ MODE_NONE = 0     # no mode controller
 MODE_STD = 1      # mode range is range of mode controller
 MODE_OPENEND = 2  # modes from 0 to valmin, values from valmin to valmax
                   # yields single mode valmin
+MODE_EXCEPT = 3   # like STD, but valinfo[0]='ctrlpage ctrlnum val' specifies
+                  # mode valmax+1 that takes precedence
+                  # ctrlpage in ['A','B','C','6E','6F']
+
+MODE_EXCEPT_TRANS = {'A': vxcmidi.CTRL_A, 'B': vxcmidi.CTRL_B, 
+                     'C': vxcmidi.CTRL_C,
+                     '6E': vxcmidi.CTRL_6E, '6F': vxcmidi.CTRL_6F}
 
 class BlockDef(object):
     def __init__(self, name='', modetype=MODE_NONE, cid=(vxcmidi.CTRL_A,17), 
-                 mrange=(0,0)):
+                 mrange=(0,0), valinfo={}):
         """mrange         tuple (firstmode, lastmode)
         """
         self.name = name
         self.modetype = modetype
         self.cid = cid
         self.valrange = mrange
+        self.valinfo = valinfo
         self.ctrldefs = []
 
     def copy(self):
         return BlockDef(self.name, self.modetype, self.cid, 
-                        self.valrange)
+                        self.valrange, self.valinfo.copy())
 
     def setRange(self, min=-1, max=-1):
         if min==-1:
@@ -124,8 +132,23 @@ class BlockDef(object):
             return self.valrange[1]-self.valrange[0]+1
         elif self.modetype==MODE_OPENEND:
             return self.valrange[0]+1
+        elif self.modetype==MODE_EXCEPT:
+            return self.valrange[1]-self.valrange[0]+2
         else:
             return 1
+
+    def getValInfo(self, ind):
+        return self.valinfo.get(ind, '')
+
+    def getExceptMode(self):
+        try:
+            page,num,val = self.valinfo[0].split()
+            cid = (MODE_EXCEPT_TRANS[page], int(num))
+            val = int(val)
+        except KeyError, ValueError:
+            cid = (CTRL_6E, 30)
+            val = 1
+        return (cid, val)
 
 
 BDEF_NAME = 0
@@ -584,6 +607,21 @@ class SeparatorGUI(wx.StaticLine):
 
 
 class CtrlBoxGUI(wx.Panel):
+    ctrlguidict = {
+        CT_STD: StdCtrlGUI,
+        CT_LIST: ListCtrlGUI,
+        CT_SHAPE: ShapeCtrlGUI,
+        CT_PREFIX: PrefixCtrlGUI,
+        CT_SIGN: SignCtrlGUI,
+        CT_SIGNPERCENT: SignPercentCtrlGUI,
+        CT_SIGNLABEL: SignLabelCtrlGUI,
+        CT_PERCENT: PercentCtrlGUI,
+        CT_INTERPOL: InterpolCtrlGUI,
+        CT_CHECKBOX: CheckCtrlGUI,
+        CT_NEGATIVE: NegCtrlGUI,
+        CT_PREFIXLIST: PrefixListCtrlGUI,
+        }
+
     def __init__(self, pagegui, interface, blockdef):
         wx.Panel.__init__(self, pagegui)
         self.pagegui = pagegui
@@ -600,40 +638,46 @@ class CtrlBoxGUI(wx.Panel):
 
         self.initModeCtrl(blockdef)
         self.controllers = []
-        self.ctrlguidict = {
-            CT_STD: StdCtrlGUI,
-            CT_LIST: ListCtrlGUI,
-            CT_SHAPE: ShapeCtrlGUI,
-            CT_PREFIX: PrefixCtrlGUI,
-            CT_SIGN: SignCtrlGUI,
-            CT_SIGNPERCENT: SignPercentCtrlGUI,
-            CT_SIGNLABEL: SignLabelCtrlGUI,
-            CT_PERCENT: PercentCtrlGUI,
-            CT_INTERPOL: InterpolCtrlGUI,
-            CT_CHECKBOX: CheckCtrlGUI,
-            CT_NEGATIVE: NegCtrlGUI,
-            CT_PREFIXLIST: PrefixListCtrlGUI,
-            }
         self.vsize = [0]*self.blockdef.getNumModes()
         for cdef in blockdef.ctrldefs:
             self.buildCtrl(cdef)
 
     def initModeCtrl(self, blockdef):
         self.modetype = blockdef.modetype
+        if blockdef.modetype==MODE_EXCEPT:
+            self.exceptmode = blockdef.getExceptMode()
+            self.interface.addListener(self.exceptmode[0], self.onExcept)
         if blockdef.modetype!=MODE_NONE:
             self.interface.addListener(blockdef.cid, self.onMode)
-            self.updateMode()
+            self.readMode()
 
-    def updateMode(self, modeval=None):
-        if self.modetype!=MODE_NONE:
-            if modeval==None:
-                self.mode = self.interface.getCtrl(self.blockdef.cid)
+    def readMode(self):
+        modeval = self.interface.getCtrl(self.blockdef.cid)
+        if self.modetype==MODE_EXCEPT:
+            exceptval = self.interface.getCtrl(self.exceptmode[0])
+            self.updateMode(modeval, exceptval)
+        elif self.modetype!=MODE_NONE:
+            self.updateMode(modeval)
+
+    def updateMode(self, modeval=None, exceptval=None):
+        if self.modetype==MODE_STD:
+            self.mode = modeval
+        elif self.modetype==MODE_OPENEND:
+            if modeval>self.blockdef.valrange[0]:
+                self.mode = self.blockdef.valrange[0]
             else:
                 self.mode = modeval
-            if self.modetype==MODE_OPENEND \
-                    and self.mode>self.blockdef.valrange[0]:
-                self.mode = self.blockdef.valrange[0]
-
+        elif self.modetype==MODE_EXCEPT:
+            if exceptval!=None:
+                if exceptval==self.exceptmode[1]:
+                    self.mode = self.blockdef.valrange[1]+1
+                else:
+                    if modeval==None:
+                        modeval = self.interface.getCtrl(self.blockdef.cid)
+                    self.mode = modeval
+            elif self.mode!=self.blockdef.valrange[1]+1:
+                self.mode = modeval
+        
     def buildCtrl(self, cdef):
         if cdef.ctype!=CT_SEPARATOR:
             ctrl = self.ctrlguidict[cdef.ctype](self, self.interface, cdef)
@@ -672,11 +716,16 @@ class CtrlBoxGUI(wx.Panel):
  #       self.boxsizer.SetSizeHints(self)
 
     def update(self):
-        self.updateMode()
+        self.readMode()
         self.updateActive()
 
     def onMode(self, val):
         self.updateMode(val)
+        self.updateActive()
+        self.pagegui.Layout()
+
+    def onExcept(self, val):
+        self.updateMode(exceptval=val)
         self.updateActive()
         self.pagegui.Layout()
 
@@ -795,7 +844,7 @@ class CtrlDefDialog(wx.Dialog):
 
         label = wx.StaticText(self, label='Mode Type')
         self.modetype = wx.Choice(self, choices=['None', 'Standard',
-                                                 'OpenEnd'])
+                                                 'OpenEnd','Except'])
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(label, 0, wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, 5)
         sizer.Add(self.modetype, 0)
@@ -924,7 +973,7 @@ class CtrlDefDialog(wx.Dialog):
         self.rangemax.Enable()
         self.rangemax.SetValue(blockdef.valrange[1])
         self.modes.Disable()
-        self.disableValInfo()
+        self.updateValInfoBlock(blockdef)
     def selPage(self, pagedef):
         self.selNone()
         self.name.Enable()
@@ -968,6 +1017,11 @@ class CtrlDefDialog(wx.Dialog):
             self.setValInfoRange(ctrldef, 0, 11)
         else:
             self.disableValInfo()
+    def updateValInfoBlock(self, blockdef):
+        if blockdef.modetype==MODE_EXCEPT:
+            self.setValInfoRange(blockdef, 0, 0)
+        else:
+            self.disableValInfo()
     def updateValInfoPage(self, pagedef):
         self.setValInfoRange(pagedef, 0, pagedef.cols-1)
 
@@ -979,6 +1033,7 @@ class CtrlDefDialog(wx.Dialog):
     def onModeType(self, evt):
         obj = self.tree.GetItemPyData(self.tree.GetSelection())
         obj.modetype = self.modetype.GetSelection()
+        self.updateValInfoBlock(obj)
     def onType(self, evt):
         obj = self.tree.GetItemPyData(self.tree.GetSelection())
         obj.ctype = self.ctype.GetSelection()
@@ -1015,7 +1070,7 @@ class CtrlDefDialog(wx.Dialog):
         if dialog.ShowModal()==wx.ID_OK:
             self.valinfo.SetStringItem(ind, 1, dialog.GetValue())
             obj = self.tree.GetItemPyData(self.tree.GetSelection())
-            if type(obj)==CtrlDef:
+            if type(obj) in [CtrlDef, BlockDef]:
                 obj.valinfo[ind] = dialog.GetValue()
             elif type(obj)==PageDef:
                 obj.setColLengthStr(ind, dialog.GetValue())
@@ -1126,3 +1181,7 @@ class CtrlDefDialog(wx.Dialog):
             ctrldef = self.tree.GetItemPyData(item)
             blockdef.ctrldefs.append(ctrldef)
             item, cook = self.tree.GetNextChild(blockitem, cook)
+
+
+def showError(errstr):
+    wx.MessageBox(errstr, "VirusXControl Error", wx.OK | wx.ICON_ERROR)
