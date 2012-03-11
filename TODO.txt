@@ -7,8 +7,6 @@ show original value of controller as saved in program
 
 bank modified state
 
-Key Follow Base controller
-
 
 mid term goals
 ==============

@@ -22,6 +22,7 @@ CT_SEPARATOR = 11
 CT_PREFIXLIST = 12   # valinfo like for CT_PREFIX
 CT_LABEL = 13        # unsigned CT_SIGNLABEL
 CT_PERCENTLABEL = 14 # valinfo[0]='label VALUE'
+CT_KEY = 15
 
 class CtrlDef(object):
     def __init__(self, name='', ctype=CT_STD, valrange=(0,127), 
@@ -630,6 +631,21 @@ class PrefixListCtrlGUI(CtrlGUI):
     def setVal(self, val):
         self.choice.SetSelection(val)
 
+KeyNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','H']
+
+class KeyCtrlGUI(StdCtrlGUI):
+    def __init__(self, parent, interface, cdef):
+        StdCtrlGUI.__init__(self, parent, interface, cdef)
+
+    def updateValText(self):
+        val = self.slider.GetValue()
+        octave = val/12 - 1
+        key = val%12
+        self.valtext.SetLabel("%s%d" % (KeyNames[key], octave))
+
+    def getValSpareText(self):
+        return 'C#-1'
+
 class CheckCtrlGUI(CtrlGUI):
     def __init__(self, parent, interface, cdef):
         CtrlGUI.__init__(self, parent, interface, cdef)
@@ -672,6 +688,7 @@ class CtrlBoxGUI(wx.Panel):
         CT_PREFIXLIST: PrefixListCtrlGUI,
         CT_LABEL: LabelCtrlGUI,
         CT_PERCENTLABEL: PercentLabelCtrlGUI,
+        CT_KEY: KeyCtrlGUI,
         }
 
     def __init__(self, pagegui, interface, blockdef):
@@ -918,7 +935,8 @@ class CtrlDefDialog(wx.Dialog):
                                         'Prefix', 'Sign', 'SignPercent',
                                         'SignLabel', 'Percent', 'Interpol', 
                                         'Checkbox', 'Negative', 'Separator',
-                                        'PrefixList', 'Label','PercentLabel'])
+                                        'PrefixList', 'Label','PercentLabel',
+                                        'Key'])
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(label, 0, wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, 5)
         sizer.Add(self.ctype, 0)

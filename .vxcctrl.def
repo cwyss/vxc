@@ -2582,7 +2582,7 @@ asg19
 I33
 tp723
 sg32
-I0
+I15
 sg33
 (dp724
 sg17
@@ -2948,7 +2948,7 @@ p843
 sbasg33
 (dp844
 sbasg17
-V.Filter
+VFilter
 p845
 sg559
 I2
@@ -4870,7 +4870,7 @@ p1342
 sbasg33
 (dp1343
 sbasg17
-VLFO
+V.LFO
 p1344
 sg559
 I3
