@@ -89,8 +89,9 @@ MODE_NONE = 0     # no mode controller
 MODE_STD = 1      # mode range is range of mode controller
 MODE_OPENEND = 2  # modes from 0 to valmin, values from valmin to valmax
                   # yields single mode valmin
-MODE_EXCEPT = 3   # like STD, but valinfo[0]='ctrlpage ctrlnum val' specifies
-                  # mode valmax+1 that takes precedence
+MODE_EXCEPT = 3   # like STD, but valinfo[0]='ctrlpage ctrlnum xmin xmax' 
+                  # specifies modes valmax+1,..,valmax+1+xmax-xmin that 
+                  # take precedence
                   # ctrlpage in ['A','B','C','6E','6F']
 
 MODE_EXCEPT_TRANS = {'A': vxcmidi.CTRL_A, 'B': vxcmidi.CTRL_B, 
@@ -133,7 +134,8 @@ class BlockDef(object):
         elif self.modetype==MODE_OPENEND:
             return self.valrange[0]+1
         elif self.modetype==MODE_EXCEPT:
-            return self.valrange[1]-self.valrange[0]+2
+            exmode = self.getExceptMode()
+            return self.valrange[1]-self.valrange[0]+2+exmode[2]-exmode[1]
         else:
             return 1
 
@@ -142,13 +144,15 @@ class BlockDef(object):
 
     def getExceptMode(self):
         try:
-            page,num,val = self.valinfo[0].split()
+            page,num,xmin,xmax = self.valinfo[0].split()
             cid = (MODE_EXCEPT_TRANS[page], int(num))
-            val = int(val)
-        except KeyError, ValueError:
-            cid = (CTRL_6E, 30)
-            val = 1
-        return (cid, val)
+            xmin = int(xmin)
+            xmax = int(xmax)
+        except (KeyError, ValueError):
+            cid = (vxcmidi.CTRL_6E, 30)
+            xmin = 1
+            xmax = 1
+        return (cid, xmin, xmax)
 
 
 BDEF_NAME = 0
@@ -669,13 +673,15 @@ class CtrlBoxGUI(wx.Panel):
                 self.mode = modeval
         elif self.modetype==MODE_EXCEPT:
             if exceptval!=None:
-                if exceptval==self.exceptmode[1]:
-                    self.mode = self.blockdef.valrange[1]+1
+                if exceptval>=self.exceptmode[1] \
+                        and exceptval<=self.exceptmode[2]:
+                    self.mode = self.blockdef.valrange[1]+1 \
+                        + exceptval-self.exceptmode[1]
                 else:
                     if modeval==None:
                         modeval = self.interface.getCtrl(self.blockdef.cid)
                     self.mode = modeval
-            elif self.mode!=self.blockdef.valrange[1]+1:
+            elif self.mode<=self.blockdef.valrange[1]:
                 self.mode = modeval
         
     def buildCtrl(self, cdef):

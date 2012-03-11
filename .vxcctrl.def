@@ -1960,7 +1960,7 @@ p528
 sbasg33
 (dp529
 I0
-V6E 30 1
+V6E 30 1 1
 p530
 ssbag1
 (g11
@@ -1977,7 +1977,7 @@ VSub Oscillator
 p535
 sg19
 (I3
-I30
+I35
 tp536
 sg21
 I3
@@ -1995,9 +1995,9 @@ I127
 tp541
 sg29
 (lp542
-I0
-aI1
+I1
 aI8
+aI9
 asg19
 (I0
 I34
@@ -2021,7 +2021,7 @@ I1
 tp549
 sg29
 (lp550
-I0
+I8
 asg19
 (I0
 I35
@@ -2042,7 +2042,7 @@ p555
 sbasg33
 (dp556
 I0
-V6E 35 1
+V6E 30 0 1
 p557
 ssbasg17
 VOsc
