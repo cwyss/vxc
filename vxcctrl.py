@@ -19,7 +19,9 @@ CT_INTERPOL = 8   # valinfo[i]='fltval VALUE'
 CT_CHECKBOX = 9
 CT_NEGATIVE = 10
 CT_SEPARATOR = 11
-CT_PREFIXLIST = 12 # valinfo like for CT_PREFIX
+CT_PREFIXLIST = 12   # valinfo like for CT_PREFIX
+CT_LABEL = 13        # unsigned CT_SIGNLABEL
+CT_PERCENTLABEL = 14 # valinfo[0]='label VALUE'
 
 class CtrlDef(object):
     def __init__(self, name='', ctype=CT_STD, valrange=(0,127), 
@@ -331,19 +333,41 @@ class SignPercentCtrlGUI(StdCtrlGUI):
 
 class SignLabelCtrlGUI(StdCtrlGUI):
     def __init__(self, parent, interface, cdef):
-        self.normlbl,val = cdef.valinfo.get(0,'x 0').split()
-        self.normval = int(val)
+        self.lbl,val = cdef.valinfo.get(0,'x 0').split()
+        self.lblval = int(val)
         StdCtrlGUI.__init__(self, parent, interface, cdef)
 
     def updateValText(self):
         val = self.slider.GetValue()-64
-        if val==self.normval:
-            self.valtext.SetLabel(self.normlbl)
+        if val==self.lblval:
+            self.valtext.SetLabel(self.lbl)
         else:
             self.valtext.SetLabel(str(val))
 
     def getValSpareText(self):
-        return self.normlbl
+        if len(self.lbl)>3:
+            return self.lbl
+        else:
+            return '127'
+
+class LabelCtrlGUI(StdCtrlGUI):
+    def __init__(self, parent, interface, cdef):
+        self.lbl,val = cdef.valinfo.get(0,'x 0').split()
+        self.lblval = int(val)
+        StdCtrlGUI.__init__(self, parent, interface, cdef)
+
+    def updateValText(self):
+        val = self.slider.GetValue()
+        if val==self.lblval:
+            self.valtext.SetLabel(self.lbl)
+        else:
+            self.valtext.SetLabel(str(val))
+
+    def getValSpareText(self):
+        if len(self.lbl)>3:
+            return self.lbl
+        else:
+            return '127'
 
 class PercentCtrlGUI(StdCtrlGUI):
     def __init__(self, parent, interface, cdef):
@@ -360,6 +384,28 @@ class PercentCtrlGUI(StdCtrlGUI):
 
     def getValSpareText(self):
         return '100.0%'
+
+class PercentLabelCtrlGUI(StdCtrlGUI):
+    def __init__(self, parent, interface, cdef):
+        self.lbl,val = cdef.valinfo.get(0,'x 0').split()
+        self.lblval = int(val)
+        self.minval = cdef.valrange[0]
+        self.factor = 100. / (cdef.valrange[1]-self.minval)
+        StdCtrlGUI.__init__(self, parent, interface, cdef)
+
+    def updateValText(self):
+        val = self.slider.GetValue()
+        if val==self.lblval:
+            self.valtext.SetLabel(self.lbl)
+        else:
+            val = (val-self.minval)*self.factor
+            self.valtext.SetLabel('%.1f%%' % val)
+
+    def getValSpareText(self):
+        if len(self.lbl)>6:
+            return self.lbl
+        else:
+            return '100.0%'
 
 class InterpolCtrlGUI(StdCtrlGUI):
     def __init__(self, parent, interface, cdef):
@@ -624,6 +670,8 @@ class CtrlBoxGUI(wx.Panel):
         CT_CHECKBOX: CheckCtrlGUI,
         CT_NEGATIVE: NegCtrlGUI,
         CT_PREFIXLIST: PrefixListCtrlGUI,
+        CT_LABEL: LabelCtrlGUI,
+        CT_PERCENTLABEL: PercentLabelCtrlGUI,
         }
 
     def __init__(self, pagegui, interface, blockdef):
@@ -780,14 +828,15 @@ class ControllersGUI(object):
         self.pages = []
         self.interface.clearAllListeners()
         try:
+            print "building pages: ",
             for pagedef in ctrlpages.pages:
                 if not pagedef.name.startswith('.'):
-                    print "building page '%s'..." % pagedef.name,
+                    print "%s.." % pagedef.name,
                     sys.stdout.flush()
                     page = CtrlPageGUI(self.notebook, self.interface, pagedef)
                     self.notebook.AddPage(page, pagedef.name)
                     self.pages.append(page)
-                    print "done"
+            print "done"
         except StandardError as error:
             raise
 #            showError(str(error))
@@ -868,8 +917,8 @@ class CtrlDefDialog(wx.Dialog):
                                choices=['Standard','List', 'Shape',
                                         'Prefix', 'Sign', 'SignPercent',
                                         'SignLabel', 'Percent', 'Interpol', 
-                                        'Checkbox', 'Negative', 'Sepatator',
-                                        'PrefixList'])
+                                        'Checkbox', 'Negative', 'Separator',
+                                        'PrefixList', 'Label','PercentLabel'])
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(label, 0, wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, 5)
         sizer.Add(self.ctype, 0)
@@ -1022,7 +1071,7 @@ class CtrlDefDialog(wx.Dialog):
             self.setValInfoRange(ctrldef, 0, 4)
         elif ctrldef.ctype in [CT_PREFIX,CT_PREFIXLIST]:
             self.setValInfoRange(ctrldef, 0, ctrldef.valrange[0])
-        elif ctrldef.ctype==CT_SIGNLABEL:
+        elif ctrldef.ctype in [CT_SIGNLABEL,CT_LABEL,CT_PERCENTLABEL]:
             self.setValInfoRange(ctrldef, 0, 0)
         elif ctrldef.ctype==CT_PERCENT:
             self.setValInfoRange(ctrldef, 0, 1)

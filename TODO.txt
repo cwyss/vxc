@@ -9,9 +9,6 @@ bank modified state
 
 Key Follow Base controller
 
-UnsignedLabel and PercentLabel controllers for LFO Trigger Phase and
-LFO Key Follow
-
 
 mid term goals
 ==============
