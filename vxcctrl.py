@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import vxcmidi, wx, pickle
+import vxcmidi, wx, pickle, sys
 
 
 
@@ -775,9 +775,13 @@ class ControllersGUI(object):
         self.interface.clearAllListeners()
         try:
             for pagedef in ctrlpages.pages:
-                page = CtrlPageGUI(self.notebook, self.interface, pagedef)
-                self.notebook.AddPage(page, pagedef.name)
-                self.pages.append(page)
+                if not pagedef.name.startswith('.'):
+                    print "building page '%s'..." % pagedef.name,
+                    sys.stdout.flush()
+                    page = CtrlPageGUI(self.notebook, self.interface, pagedef)
+                    self.notebook.AddPage(page, pagedef.name)
+                    self.pages.append(page)
+                    print "done"
         except StandardError as error:
             raise
 #            showError(str(error))

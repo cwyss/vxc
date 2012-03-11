@@ -1963,7 +1963,7 @@ I0
 V6E 30 1
 p530
 ssbasg17
-VOsc
+V.Osc
 p531
 sS'cols'
 p532
@@ -8108,7 +8108,7 @@ p1033
 sbasg33
 (dp1034
 sbasg17
-VMatrix
+V.Matrix
 p1035
 sg532
 I3

@@ -471,16 +471,14 @@ class vxcFrame(wx.Frame):
         self.createMenu()
 
         self.notebook = wx.Notebook(self)
-        print "proglibGUI"
+        print "build ProgLib page"
         self.proglib = ProgLibGUI(self.notebook, interface)
-        print "ctrlpages"
         self.initCtrlPages()
-        print "controllersGUI"
         self.controllers = vxcctrl.ControllersGUI(self.notebook, interface)
         self.setupNotebook()
 
-        print "proglib"
         if len(self.prefs.proglib):
+            print "load proglib"
             self.loadProgLib(self.prefs.proglib)
         else:
             self.onProgChange()
@@ -589,6 +587,7 @@ class vxcFrame(wx.Frame):
     def initCtrlPages(self):
         self.ctrlpages = vxcctrl.CtrlPages()
         if len(self.prefs.ctrldef)>0:
+            print "load controller defs"
             try:
                 self.ctrlpages.loadFromFile(self.prefs.ctrldef)
             except IOError as error:
@@ -744,12 +743,10 @@ class vxcGUI(object):
         self.midinotify = self.nop
         self.app.Bind(EVT_MIDI, self.onMidi)
 
-        print "interface"
+        print "setup midi"
         self.interface = vxcmidi.ProgInterface(self)
-        print "frame"
         self.frame = vxcFrame(self.interface)
 
-        print "show"
 #        self.frame.Fit()
         self.frame.Show()
 
