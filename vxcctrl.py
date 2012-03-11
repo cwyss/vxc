@@ -917,7 +917,7 @@ class CtrlDefDialog(wx.Dialog):
         for page in ctrlpages.pages:
             pageid = self.tree.AppendItem(rootid, '')
             self.insertPage(pageid, page)
-            self.tree.Expand(pageid)
+#            self.tree.Expand(pageid)
         self.tree.Expand(rootid)
 
     def insertPage(self, pageitem, pagedef):
