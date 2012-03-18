@@ -3,8 +3,6 @@ short term goals
 
 keyboard access to controllers
 
-show original value of controller as saved in program
-
 bank modified state
 
 

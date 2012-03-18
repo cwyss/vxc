@@ -622,7 +622,9 @@ class ProgInterface(object):
         self.notify(ctrlid, val)
         if self.midiint.isOpen():
             self.midiint.writeCtrl(ctrlid, val)
-        self.gui.setMidiMsg(makeCtrlInfoStr(ctrlid, val))
+        infostr = makeCtrlInfoStr(ctrlid, val, 
+                                  self.current_orig.getCtrl(ctrlid))
+        self.gui.setMidiMsg(infostr)
         if not self.is_modified:
             self.setProgModified()
 
