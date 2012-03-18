@@ -584,6 +584,7 @@ class ListCtrlGUI(CtrlGUI):
     def __init__(self, parent, interface, cdef):
         CtrlGUI.__init__(self, parent, interface, cdef)
 
+        self.offset = cdef.valrange[0]
         lbls = [('%d:  ' % i) + cdef.valinfo.get(i,'') 
                 for i in range(cdef.valrange[0], cdef.valrange[1]+1)]
         self.choice = wx.Choice(self, -1, choices=lbls)
@@ -594,10 +595,10 @@ class ListCtrlGUI(CtrlGUI):
         self.Bind(wx.EVT_CHOICE, self.onChoice)
 
     def onChoice(self, evt):
-        self.onGUI(self.choice.GetSelection())
+        self.onGUI(self.choice.GetSelection()+self.offset)
 
     def setVal(self, val):
-        self.choice.SetSelection(val)
+        self.choice.SetSelection(val-self.offset)
 
 class PrefixListCtrlGUI(CtrlGUI):
     def __init__(self, parent, interface, cdef):
@@ -719,6 +720,8 @@ class CtrlBoxGUI(wx.Panel):
         if blockdef.modetype!=MODE_NONE:
             self.interface.addListener(blockdef.cid, self.onMode)
             self.readMode()
+        else:
+            self.mode = 0
 
     def readMode(self):
         modeval = self.interface.getCtrl(self.blockdef.cid)
@@ -1078,9 +1081,10 @@ class CtrlDefDialog(wx.Dialog):
     def setValInfoRange(self, obj, indmin, indmax):
         self.valinfo.Enable()
         self.valinfo.DeleteAllItems()
-        for i in range(indmin, indmax+1):
-            self.valinfo.InsertStringItem(i, str(i))
-            self.valinfo.SetStringItem(i, 1, obj.getValInfo(i))
+        for i in range(indmax-indmin+1):
+            self.valinfo.InsertStringItem(i, str(i+indmin))
+            self.valinfo.SetStringItem(i, 1, obj.getValInfo(i+indmin))
+        self.valinfo_offset = indmin
     def updateValInfo(self, ctrldef):
         if ctrldef.ctype==CT_LIST:
             self.setValInfoRange(ctrldef,
@@ -1144,14 +1148,14 @@ class CtrlDefDialog(wx.Dialog):
     def onValInfo(self, evt):
         ind = evt.GetIndex()
         item = self.valinfo.GetItem(ind, 1)
-        dialog = wx.TextEntryDialog(None, 'Enter ValInfo %d' % ind, 
-                                    'Edit ValInfo',
+        dialogmsg = 'Enter ValInfo %d' % (ind+self.valinfo_offset)
+        dialog = wx.TextEntryDialog(None, dialogmsg, 'Edit ValInfo',
                                     item.GetText())
         if dialog.ShowModal()==wx.ID_OK:
             self.valinfo.SetStringItem(ind, 1, dialog.GetValue())
             obj = self.tree.GetItemPyData(self.tree.GetSelection())
             if type(obj) in [CtrlDef, BlockDef]:
-                obj.valinfo[ind] = dialog.GetValue()
+                obj.valinfo[ind+self.valinfo_offset] = dialog.GetValue()
             elif type(obj)==PageDef:
                 obj.setColLengthStr(ind, dialog.GetValue())
         dialog.Destroy()

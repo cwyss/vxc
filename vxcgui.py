@@ -456,7 +456,7 @@ class Prefs(wx.Dialog):
 class vxcFrame(wx.Frame):
     def __init__(self, interface):
         wx.Frame.__init__(self, parent=None, title='VirusXControl',
-                          size=(800,500))
+                          size=(950,590))
         self.interface = interface
         interface.addPrgChngListener(self.onProgChange)
         interface.addLibChngListener(self.onLibChange)
