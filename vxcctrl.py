@@ -133,12 +133,12 @@ class BlockDef(object):
 
     def getNumModes(self):
         if self.modetype==MODE_STD:
-            return self.valrange[1]-self.valrange[0]+1
+            return self.valrange[1]+1
         elif self.modetype==MODE_OPENEND:
             return self.valrange[0]+1
         elif self.modetype==MODE_EXCEPT:
             exmode = self.getExceptMode()
-            return self.valrange[1]-self.valrange[0]+2+exmode[2]-exmode[1]
+            return self.valrange[1]+2+exmode[2]-exmode[1]
         else:
             return 1
 

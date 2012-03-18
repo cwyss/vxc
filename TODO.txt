@@ -24,6 +24,8 @@ ListCtrlGUIs entirely in all modes
 
 dB controllers for 'effect send' and 'EQ gain'
 
+'float' controller for 'Delay Time' 'Reverb Predelay'
+
 
 long term goals
 ===============
