@@ -347,21 +347,52 @@ class ReadBankDialog(wx.Dialog):
         return lst
 
 
-class Prefs(wx.Dialog):
+class Prefs(object):
     def __init__(self):
-        wx.Dialog.__init__(self, None, title="Preferences")
-
         self.port = 'hw:1,0,1'
         self.proglib = ''
         self.ctrldef = ''
         self.midifilter = 0
         self.connect = 1
-        self.allwaysRecv = 1
-        self.allwaysSend = 0
+        self.alwaysRecv = 1
+        self.alwaysSend = 0
         self.winsize = [800,500]
 
         self.load(tryit=True)
+
+    def load(self, filename='.vxcrc', tryit=False):
+        try:
+            rdr = csv.reader(open(filename, 'r'))
+            self.port, self.proglib, self.ctrldef = rdr.next()
+            self.midifilter = int(rdr.next()[0])
+            self.connect,self.alwaysRecv,self.alwaysSend = \
+                map(int, rdr.next())
+            self.winsize = map(int, rdr.next())
+        except IOError as error:
+            if error.errno!=os.errno.ENOENT or not tryit:
+                showError(str(error))
+        except ValueError:
+            showError("rc file %s: wrong type" % filename)
+        except StopIteration:
+            pass
+
+    def save(self, filename='.vxcrc'):
+        try:
+            wrt = csv.writer(open(filename, 'w'))
+            wrt.writerow((self.port, self.proglib, self.ctrldef))
+            wrt.writerow((self.midifilter,))
+            wrt.writerow((self.connect,self.alwaysRecv,self.alwaysSend))
+            wrt.writerow(self.winsize)
+        except IOError as error:
+            showError(str(error))
+
+
+class PrefsDialog(wx.Dialog):
+    def __init__(self, prefs):
+        wx.Dialog.__init__(self, None, title="Preferences")
+        self.prefs = prefs
         self.setupDialog()
+        self.setValues()
 
     def setupDialog(self):
         self.sizer = wx.FlexGridSizer(cols=2, hgap=5, vgap=5)
@@ -376,7 +407,7 @@ class Prefs(wx.Dialog):
         portsizer.Add(self.connectCtrl, 0, wx.EXPAND)
         self.recvCtrl = wx.CheckBox(self, -1, 'Always Recieve')
         portsizer.Add(self.recvCtrl, 0, wx.EXPAND)
-        self.sendCtrl = wx.CheckBox(self, -1, 'Allways Send')
+        self.sendCtrl = wx.CheckBox(self, -1, 'Always Send')
         portsizer.Add(self.sendCtrl, 0, wx.EXPAND)
         self.sizer.Add(label, 0, 
                        wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
@@ -423,32 +454,6 @@ class Prefs(wx.Dialog):
         but = wx.Button(self, wx.ID_OK, 'Ok')
         self.sizer.Add(but, 0)
 
-    def load(self, filename='.vxcrc', tryit=False):
-        try:
-            rdr = csv.reader(open(filename, 'r'))
-            self.port, self.proglib, self.ctrldef = rdr.next()
-            self.midifilter = int(rdr.next()[0])
-            self.connect,self.allwaysRecv,self.allwaysSend = \
-                map(int, rdr.next())
-            self.winsize = map(int, rdr.next())
-        except IOError as error:
-            if error.errno!=os.errno.ENOENT or not tryit:
-                showError(str(error))
-        except ValueError:
-            showError("rc file %s: wrong type" % filename)
-        except StopIteration:
-            pass
-
-    def save(self, filename='.vxcrc'):
-        try:
-            wrt = csv.writer(open(filename, 'w'))
-            wrt.writerow((self.port, self.proglib, self.ctrldef))
-            wrt.writerow((self.midifilter,))
-            wrt.writerow((self.connect,self.allwaysRecv,self.allwaysSend))
-            wrt.writerow(self.winsize)
-        except IOError as error:
-            showError(str(error))
-
     def setFltValue(self, filter):
         self.fltnote.SetValue(filter & vxcmidi.FILTER_NOTE)
         self.fltpress.SetValue(filter & vxcmidi.FILTER_CHNPRESS)
@@ -467,35 +472,35 @@ class Prefs(wx.Dialog):
             filter += vxcmidi.FILTER_MOD
         return filter
 
-    def doDialog(self):
-        self.portCtrl.SetValue(self.port)
-        self.proglibCtrl.SetValue(self.proglib)
-        self.ctrldefCtrl.SetValue(self.ctrldef)
-        self.setFltValue(self.midifilter)
-        self.connectCtrl.SetValue(self.connect)
-        self.recvCtrl.SetValue(self.allwaysRecv)
-        self.sendCtrl.SetValue(self.allwaysSend)
-        self.winwidth.SetValue(self.winsize[0])
-        self.winheight.SetValue(self.winsize[1])
-        if self.ShowModal()==wx.ID_OK:
-            self.port = self.portCtrl.GetValue()
-            self.proglib = self.proglibCtrl.GetValue()
-            self.ctrldef = self.ctrldefCtrl.GetValue()
-            self.midifilter = self.getFltValue()
-            self.connect = int(self.connectCtrl.GetValue())
-            self.allwaysRecv = int(self.recvCtrl.GetValue())
-            self.allwaysSend = int(self.sendCtrl.GetValue())
-            self.winsize[0] = self.winwidth.GetValue()
-            self.winsize[1] = self.winheight.GetValue()
-            self.save()
+    def setValues(self):
+        self.portCtrl.SetValue(self.prefs.port)
+        self.proglibCtrl.SetValue(self.prefs.proglib)
+        self.ctrldefCtrl.SetValue(self.prefs.ctrldef)
+        self.setFltValue(self.prefs.midifilter)
+        self.connectCtrl.SetValue(self.prefs.connect)
+        self.recvCtrl.SetValue(self.prefs.alwaysRecv)
+        self.sendCtrl.SetValue(self.prefs.alwaysSend)
+        self.winwidth.SetValue(self.prefs.winsize[0])
+        self.winheight.SetValue(self.prefs.winsize[1])
+
+    def getValues(self):
+        self.prefs.port = self.portCtrl.GetValue()
+        self.prefs.proglib = self.proglibCtrl.GetValue()
+        self.prefs.ctrldef = self.ctrldefCtrl.GetValue()
+        self.prefs.midifilter = self.getFltValue()
+        self.prefs.connect = int(self.connectCtrl.GetValue())
+        self.prefs.alwaysRecv = int(self.recvCtrl.GetValue())
+        self.prefs.alwaysSend = int(self.sendCtrl.GetValue())
+        self.prefs.winsize[0] = self.winwidth.GetValue()
+        self.prefs.winsize[1] = self.winheight.GetValue()
 
 
 class vxcFrame(wx.Frame):
-    def __init__(self, interface):
-        wx.Frame.__init__(self, parent=None, title='VirusXControl')
+    def __init__(self, interface, prefs):
+        wx.Frame.__init__(self, parent=None, title='VirusXControl',
+                          size=prefs.winsize)
 
-        self.prefs = Prefs()
-        self.SetSize(self.prefs.winsize)
+        self.prefs = prefs
         self.Bind(wx.EVT_CLOSE, self.onClose)
 
         self.interface = interface
@@ -506,7 +511,6 @@ class vxcFrame(wx.Frame):
 
         self.statusbar = self.CreateStatusBar()
         self.statusbar.SetFieldsCount(2)
-        self.setMidiMsg('disconnected')
         self.createMenu()
 
         self.notebook = wx.Notebook(self)
@@ -516,15 +520,8 @@ class vxcFrame(wx.Frame):
         self.controllers = vxcctrl.ControllersGUI(self.notebook, interface)
         self.setupNotebook()
 
-        if len(self.prefs.proglib):
-            print "load proglib"
-            self.loadProgLib(self.prefs.proglib)
-        else:
-            self.onProgChange()
-
     def onClose(self, evt):
         self.limitdialog.Destroy()
-        self.prefs.Destroy()
         self.Destroy()
 
     def onProgChange(self):
@@ -550,8 +547,9 @@ class vxcFrame(wx.Frame):
         menubar = wx.MenuBar()
 
         menu = wx.Menu()
-        item = menu.AppendCheckItem(-1, '&Connect to Virus\tctrl-c')
-        self.Bind(wx.EVT_MENU, self.onConnect, item)
+        self.menuItemConnect = \
+            menu.AppendCheckItem(-1, '&Connect to Virus\tctrl-c')
+        self.Bind(wx.EVT_MENU, self.onConnect, self.menuItemConnect)
         menu.AppendSeparator()
         item = menu.Append(-1, 'Preferences...')
         self.Bind(wx.EVT_MENU, self.onPrefs, item)
@@ -583,6 +581,8 @@ class vxcFrame(wx.Frame):
         item = menu.Append(-1, 'Receive\tctrl-r')
         self.Bind(wx.EVT_MENU, self.onRecvProg, item)
         item = menu.AppendCheckItem(-1, 'Always Receive')
+        if self.prefs.alwaysRecv:
+            item.Check()
         self.Bind(wx.EVT_MENU, self.onAlwaysRecv, item)
         menubar.Append(menu, '&Single')
 
@@ -622,7 +622,7 @@ class vxcFrame(wx.Frame):
             menubar.Replace(oldpos, menu, '&Navigate')
         else:
             menubar.Append(menu, '&Navigate')
-
+        
     def initCtrlPages(self):
         self.ctrlpages = vxcctrl.CtrlPages()
         if len(self.prefs.ctrldef)>0:
@@ -651,22 +651,31 @@ class vxcFrame(wx.Frame):
             showError('Error reading program library.\n' +
                       error.strerror+': '+error.filename)
 
+    def connect(self, quiet=False):
+        try:
+            self.interface.connect(self.prefs.port, self.prefs.midifilter)
+        except StandardError as error:
+            if not quiet:
+                showError(str(error))
+            self.menuItemConnect.Check(False)
+            self.setMidiMsg('disconnected')
+        else:
+            self.menuItemConnect.Check(True)
+            self.setMidiMsg('connected')
 
     def onConnect(self, evt):
-        if self.GetMenuBar().IsChecked(evt.GetId()):
-            try:
-                self.setMidiMsg('connected')
-                self.interface.connect(self.prefs.port, self.prefs.midifilter)
-            except StandardError as error:
-                showError(str(error))
-                self.GetMenuBar().Check(evt.GetId(), False)
-                self.setMidiMsg('disconnected')
+        if self.menuItemConnect.IsChecked():
+            self.connect()
         else:
             self.interface.disconnect()
             self.setMidiMsg('disconnected')
 
     def onPrefs(self, evt):
-        self.prefs.doDialog()
+        dialog = PrefsDialog(self.prefs)
+        if dialog.ShowModal()==wx.ID_OK:
+            dialog.getValues()
+            self.prefs.save()
+        dialog.Destroy()
 
     def onCtrlSetup(self, evt):
         dialog = vxcctrl.CtrlDefDialog(self.ctrlpages)
@@ -782,12 +791,23 @@ class vxcGUI(object):
         self.midinotify = self.nop
         self.app.Bind(EVT_MIDI, self.onMidi)
 
+        self.prefs = Prefs()
         print "setup midi"
         self.interface = vxcmidi.ProgInterface(self)
-        self.frame = vxcFrame(self.interface)
+        self.interface.setAlwaysReceive(self.prefs.alwaysRecv)
 
+        self.frame = vxcFrame(self.interface, self.prefs)
 #        self.frame.Fit()
         self.frame.Show()
+
+        if self.prefs.connect:
+            self.frame.connect(quiet=True)
+
+        if len(self.prefs.proglib):
+            print "load proglib"
+            self.frame.loadProgLib(self.prefs.proglib)
+#        else:
+#            self.frame.onProgChange()
 
     def run(self):
         self.app.MainLoop()

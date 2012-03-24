@@ -640,8 +640,6 @@ class ProgInterface(object):
             self.midiint.start(devname, filter)
             if self.alwaysrecv:
                 self.readSingleVirus()
-            else:
-                self.midiint.sendsingleedit(self.current.dump)
 
     def disconnect(self):
         self.midiint.stop()
