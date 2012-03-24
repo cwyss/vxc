@@ -552,6 +552,7 @@ class ProgInterface(object):
         self.req = REQ_NONE
         self.bankreqlist = None
         self.alwaysrecv = False
+        self.alwayssend = False
 
         self.progChange(SingleProg(), "")
         self.proglib = ProgLibrary(self.progChange, self.libChange)
@@ -595,7 +596,7 @@ class ProgInterface(object):
         self.is_modified = modified
         for func in self.prgchng_lst:
             func()
-        if sendmidi and self.midiint.isOpen():
+        if sendmidi and self.alwayssend and self.midiint.isOpen():
             self.midiint.sendsingleedit(self.current.dump)
 
     def isProgModified(self):
@@ -640,6 +641,8 @@ class ProgInterface(object):
             self.midiint.start(devname, filter)
             if self.alwaysrecv:
                 self.readSingleVirus()
+            elif self.alwayssend:
+                self.sendSingleVirus()
 
     def disconnect(self):
         self.midiint.stop()
@@ -648,6 +651,11 @@ class ProgInterface(object):
         return self.alwaysrecv
     def setAlwaysReceive(self, recv):
         self.alwaysrecv = recv
+    def setAlwaysSend(self, send):
+        self.alwayssend = send
+
+    def sendSingleVirus(self):
+        self.midiint.sendsingleedit(self.current.dump)
 
     def readSingleVirus(self):
         if self.req==REQ_NONE:

@@ -580,10 +580,16 @@ class vxcFrame(wx.Frame):
         menu.AppendSeparator()
         item = menu.Append(-1, 'Receive\tctrl-r')
         self.Bind(wx.EVT_MENU, self.onRecvProg, item)
+        item = menu.Append(-1, 'Send\tctrl-w')
+        self.Bind(wx.EVT_MENU, self.onSendProg, item)
         item = menu.AppendCheckItem(-1, 'Always Receive')
         if self.prefs.alwaysRecv:
             item.Check()
         self.Bind(wx.EVT_MENU, self.onAlwaysRecv, item)
+        item = menu.AppendCheckItem(-1, 'Always Send')
+        if self.prefs.alwaysSend:
+            item.Check()
+        self.Bind(wx.EVT_MENU, self.onAlwaysSend, item)
         menubar.Append(menu, '&Single')
 
         menu = wx.Menu()
@@ -706,6 +712,16 @@ class vxcFrame(wx.Frame):
         recv = self.GetMenuBar().IsChecked(evt.GetId())
         self.interface.setAlwaysReceive(recv)
 
+    def onSendProg(self, evt):
+        try:
+            self.interface.sendSingleVirus()
+        except StandardError as error:
+            showError(str(error))
+        
+    def onAlwaysSend(self, evt):
+        send = self.GetMenuBar().IsChecked(evt.GetId())
+        self.interface.setAlwaysSend(send)
+
     def onReadBank(self, evt):
         dialog = ReadBankDialog()
         ret = dialog.ShowModal()
@@ -795,6 +811,7 @@ class vxcGUI(object):
         print "setup midi"
         self.interface = vxcmidi.ProgInterface(self)
         self.interface.setAlwaysReceive(self.prefs.alwaysRecv)
+        self.interface.setAlwaysSend(self.prefs.alwaysSend)
 
         self.frame = vxcFrame(self.interface, self.prefs)
 #        self.frame.Fit()
