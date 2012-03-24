@@ -355,6 +355,10 @@ class Prefs(wx.Dialog):
         self.proglib = ''
         self.ctrldef = ''
         self.midifilter = 0
+        self.connect = 1
+        self.allwaysRecv = 1
+        self.allwaysSend = 0
+        self.winsize = [800,500]
 
         self.load(tryit=True)
         self.setupDialog()
@@ -365,10 +369,18 @@ class Prefs(wx.Dialog):
         self.SetSizer(self.sizer)
 
         label = wx.StaticText(self, label='Midi Port')
+        portsizer = wx.BoxSizer(wx.VERTICAL)
         self.portCtrl = wx.TextCtrl(self)
+        portsizer.Add(self.portCtrl, 0, wx.EXPAND)
+        self.connectCtrl = wx.CheckBox(self, -1, 'Connect at Startup')
+        portsizer.Add(self.connectCtrl, 0, wx.EXPAND)
+        self.recvCtrl = wx.CheckBox(self, -1, 'Always Recieve')
+        portsizer.Add(self.recvCtrl, 0, wx.EXPAND)
+        self.sendCtrl = wx.CheckBox(self, -1, 'Allways Send')
+        portsizer.Add(self.sendCtrl, 0, wx.EXPAND)
         self.sizer.Add(label, 0, 
                        wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
-        self.sizer.Add(self.portCtrl, 0, wx.EXPAND)
+        self.sizer.Add(portsizer, 0, wx.EXPAND)
 
         label = wx.StaticText(self, label='Program Library')
         self.proglibCtrl = wx.TextCtrl(self)
@@ -396,6 +408,16 @@ class Prefs(wx.Dialog):
                        wx.ALIGN_RIGHT|wx.ALIGN_TOP)
         self.sizer.Add(fltsizer, 0, wx.EXPAND)
 
+        label = wx.StaticText(self, label='Window Size')
+        wssizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.winwidth = wx.SpinCtrl(self, max=9999)
+        wssizer.Add(self.winwidth, 0)
+        self.winheight = wx.SpinCtrl(self, max=9999)
+        wssizer.Add(self.winheight, 0)
+        self.sizer.Add(label, 0, 
+                       wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
+        self.sizer.Add(wssizer, 0, wx.EXPAND)
+
         but = wx.Button(self, wx.ID_CANCEL, 'Cancel')
         self.sizer.Add(but, 0)
         but = wx.Button(self, wx.ID_OK, 'Ok')
@@ -406,6 +428,9 @@ class Prefs(wx.Dialog):
             rdr = csv.reader(open(filename, 'r'))
             self.port, self.proglib, self.ctrldef = rdr.next()
             self.midifilter = int(rdr.next()[0])
+            self.connect,self.allwaysRecv,self.allwaysSend = \
+                map(int, rdr.next())
+            self.winsize = map(int, rdr.next())
         except IOError as error:
             if error.errno!=os.errno.ENOENT or not tryit:
                 showError(str(error))
@@ -419,6 +444,8 @@ class Prefs(wx.Dialog):
             wrt = csv.writer(open(filename, 'w'))
             wrt.writerow((self.port, self.proglib, self.ctrldef))
             wrt.writerow((self.midifilter,))
+            wrt.writerow((self.connect,self.allwaysRecv,self.allwaysSend))
+            wrt.writerow(self.winsize)
         except IOError as error:
             showError(str(error))
 
@@ -445,24 +472,36 @@ class Prefs(wx.Dialog):
         self.proglibCtrl.SetValue(self.proglib)
         self.ctrldefCtrl.SetValue(self.ctrldef)
         self.setFltValue(self.midifilter)
+        self.connectCtrl.SetValue(self.connect)
+        self.recvCtrl.SetValue(self.allwaysRecv)
+        self.sendCtrl.SetValue(self.allwaysSend)
+        self.winwidth.SetValue(self.winsize[0])
+        self.winheight.SetValue(self.winsize[1])
         if self.ShowModal()==wx.ID_OK:
             self.port = self.portCtrl.GetValue()
             self.proglib = self.proglibCtrl.GetValue()
             self.ctrldef = self.ctrldefCtrl.GetValue()
             self.midifilter = self.getFltValue()
+            self.connect = int(self.connectCtrl.GetValue())
+            self.allwaysRecv = int(self.recvCtrl.GetValue())
+            self.allwaysSend = int(self.sendCtrl.GetValue())
+            self.winsize[0] = self.winwidth.GetValue()
+            self.winsize[1] = self.winheight.GetValue()
             self.save()
 
 
 class vxcFrame(wx.Frame):
     def __init__(self, interface):
-        wx.Frame.__init__(self, parent=None, title='VirusXControl',
-                          size=(800,500))
+        wx.Frame.__init__(self, parent=None, title='VirusXControl')
+
+        self.prefs = Prefs()
+        self.SetSize(self.prefs.winsize)
+        self.Bind(wx.EVT_CLOSE, self.onClose)
+
         self.interface = interface
         interface.addPrgChngListener(self.onProgChange)
         interface.addLibChngListener(self.onLibChange)
-        self.Bind(wx.EVT_CLOSE, self.onClose)
 
-        self.prefs = Prefs()
         self.limitdialog = LimitDialog(interface.proglib)
 
         self.statusbar = self.CreateStatusBar()
