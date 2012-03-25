@@ -22,6 +22,10 @@ load selected bank from program library
 minimum size for window or scrollable area in tabs to show
 ListCtrlGUIs entirely in all modes
 
+dB controllers for 'effect send' and 'EQ gain'
+
+'float' controller for 'Delay Time' 'Reverb Predelay'
+
 
 long term goals
 ===============
