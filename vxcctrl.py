@@ -96,6 +96,7 @@ MODE_EXCEPT = 3   # like STD, but valinfo[0]='ctrlpage ctrlnum xmin xmax'
                   # specifies modes valmax+1,..,valmax+1+xmax-xmin that 
                   # take precedence
                   # ctrlpage in ['A','B','C','6E','6F']
+MODE_MUTE = 4     # additional mute buttons, no mode controller
 
 MODE_EXCEPT_TRANS = {'A': vxcmidi.CTRL_A, 'B': vxcmidi.CTRL_B, 
                      'C': vxcmidi.CTRL_C,
@@ -276,7 +277,7 @@ class StdCtrlGUI(CtrlGUI):
         self.valtext.SetMinSize(self.valtext.GetSize())
 
         self.sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.sizer.Add(self.slider, 1)
+        self.sizer.Add(self.slider, 1, wx.ALIGN_CENTER)
         self.sizer.Add(self.valtext, 0, wx.ALIGN_CENTER)
         self.SetSizer(self.sizer)
 #        self.Layout()
@@ -673,7 +674,7 @@ class SeparatorGUI(wx.StaticLine):
         return self.gaps[mode]
 
 
-class CtrlBoxGUI(wx.Panel):
+class CtrlBoxBase(wx.Panel):
     ctrlguidict = {
         CT_STD: StdCtrlGUI,
         CT_LIST: ListCtrlGUI,
@@ -701,16 +702,45 @@ class CtrlBoxGUI(wx.Panel):
         box = wx.StaticBox(self, -1, blockdef.name)
         self.boxsizer = wx.StaticBoxSizer(box, wx.VERTICAL)
         self.SetSizer(self.boxsizer)
+        self.hgap = 5
         self.vgap = 4
-        self.sizer = wx.FlexGridSizer(cols=2, hgap=5, vgap=self.vgap)
+        self.controllers = []
+        self.nummodes = self.blockdef.getNumModes()
+        self.vsize = [0]*self.nummodes
+
+    def build(self):
+        for cdef in self.blockdef.ctrldefs:
+            self.buildCtrl(cdef)
+
+    def buildCtrl(self, cdef):
+        if cdef.ctype!=CT_SEPARATOR:
+            ctrl = self.ctrlguidict[cdef.ctype](self, self.interface, cdef)
+            ctrl.Fit()
+            for m in range(self.nummodes):
+                if m in cdef.modes:
+                    self.vsize[m] += ctrl.GetSize()[1]+self.vgap
+        else:
+            maxsize = max(self.vsize)
+            ctrl = SeparatorGUI(self, [maxsize-s for s in self.vsize])
+            self.vsize = [0]*self.nummodes
+        centry = (cdef, ctrl)
+        self.controllers.append(centry)
+
+    def update(self):
+        pass
+
+
+class CtrlBoxGUI(CtrlBoxBase):
+    def __init__(self, pagegui, interface, blockdef):
+        CtrlBoxBase.__init__(self, pagegui, interface, blockdef)
+
+        self.sizer = wx.FlexGridSizer(cols=2, hgap=self.hgap, vgap=self.vgap)
         self.sizer.AddGrowableCol(1)
         self.boxsizer.Add(self.sizer, 0, wx.EXPAND)
 
         self.initModeCtrl(blockdef)
-        self.controllers = []
-        self.vsize = [0]*self.blockdef.getNumModes()
-        for cdef in blockdef.ctrldefs:
-            self.buildCtrl(cdef)
+        self.build()
+        self.updateActive()
 
     def initModeCtrl(self, blockdef):
         self.modetype = blockdef.modetype
@@ -751,21 +781,6 @@ class CtrlBoxGUI(wx.Panel):
                     self.mode = modeval
             elif self.mode<=self.blockdef.valrange[1]:
                 self.mode = modeval
-        
-    def buildCtrl(self, cdef):
-        if cdef.ctype!=CT_SEPARATOR:
-            ctrl = self.ctrlguidict[cdef.ctype](self, self.interface, cdef)
-            ctrl.Fit()
-            for m in range(self.blockdef.getNumModes()):
-                if m in cdef.modes:
-                    self.vsize[m] += ctrl.GetSize()[1]+self.vgap
-        else:
-            maxsize = max(self.vsize)
-            ctrl = SeparatorGUI(self, [maxsize-s for s in self.vsize])
-            self.vsize = [0]*self.blockdef.getNumModes()
-        centry = (cdef, ctrl)
-        self.controllers.append(centry)
-        self.updateCtrl(centry)
 
     def updateCtrl(self, centry):
         cdef,ctrl = centry
@@ -804,6 +819,123 @@ class CtrlBoxGUI(wx.Panel):
         self.pagegui.Layout()
 
 
+class MuteBitmaps(object):
+    def __init__(self, winobj):
+        self.size = winobj.ConvertDialogSizeToPixels((10,6))
+        self.activebmp = self.makeBMC('green')
+        self.inactivebmp = self.makeBMC('yellow')
+        self.mutebmp = self.makeBMC('red')
+
+    def makeBMC(self, color):
+        bmp = wx.EmptyBitmap(*self.size)
+        dc = wx.MemoryDC()
+        dc.SelectObject(bmp)
+        dc.SetBackground(wx.Brush(color))
+        dc.Clear()
+        dc.SelectObject(wx.NullBitmap)
+        return bmp
+
+
+MB_INACTIVE = 0
+MB_MUTE = 1
+MB_ACTIVE = 2
+
+class MuteButton(wx.BitmapButton):
+    def __init__(self, parent, interface, cid, ctrl, onmute, ind, mutebitmaps):
+        wx.BitmapButton.__init__(self, parent, -1, mutebitmaps.inactivebmp)
+        self.cval = 0
+        self.state = MB_INACTIVE
+        self.onmute = onmute
+        self.ind = ind
+        self.mutebitmaps = mutebitmaps
+        self.interface = interface
+        self.cid = cid
+        self.ctrl = ctrl
+        self.Bind(wx.EVT_BUTTON, self.onGUI)
+        
+        interface.addListener(cid, self.onCtrl)
+
+    def onGUI(self, evt):
+        if self.state==MB_MUTE:
+            self.setMute(False)
+        else:
+            self.setMute(True)
+        self.onmute(self.state, self.ind)
+
+    def onCtrl(self, val):
+        self.setState(val)
+        self.onmute(self.state, self.ind)
+
+    def setMute(self, mute):
+        if mute:
+            cval = self.interface.getCtrl(self.cid)
+            if cval:
+                self.state = MB_MUTE
+                self.cval = cval
+                self.interface.setCtrl(self.cid, 0)
+                self.SetBitmapLabel(self.mutebitmaps.mutebmp)
+        elif self.state==MB_MUTE:
+            self.interface.setCtrl(self.cid, self.cval)
+            # note that setCtrl() triggers setState()
+
+    def setState(self, cval):
+        if cval:
+            if self.state!=MB_ACTIVE:
+                self.state = MB_ACTIVE
+                self.SetBitmapLabel(self.mutebitmaps.activebmp)
+        elif self.state!=MB_MUTE:
+            self.state = MB_INACTIVE
+            self.SetBitmapLabel(self.mutebitmaps.inactivebmp)
+
+    def update(self):
+        cval = self.interface.getCtrl(self.cid)
+        self.setState(cval)
+
+
+class MuteBoxGUI(CtrlBoxBase):
+    def __init__(self, pagegui, interface, blockdef):
+        CtrlBoxBase.__init__(self, pagegui, interface, blockdef)
+
+        self.sizer = wx.FlexGridSizer(cols=3, hgap=self.hgap, vgap=self.vgap)
+        self.sizer.AddGrowableCol(2)
+        self.boxsizer.Add(self.sizer, 0, wx.EXPAND)
+
+        self.build()
+        self.build2()
+        self.update()
+
+    def build2(self):
+        self.mutes = []
+        mutebitmaps = MuteBitmaps(self)
+        for cdef,ctrl in self.controllers:
+            if cdef.ctype!=CT_SEPARATOR:
+                ind = len(self.mutes)
+                mute = MuteButton(self, self.interface, cdef.cid, ctrl,
+                                  self.onMuteBut, ind, mutebitmaps)
+                self.mutes.append(mute)
+
+                ctrl.Show()
+                self.sizer.Add(ctrl.label, 0, 
+                               wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
+                self.sizer.Add(mute, 0, wx.ALIGN_CENTER_VERTICAL)
+                self.sizer.Add(ctrl, 0, wx.EXPAND)
+            else:
+                self.sizer.Add((1,1))
+                self.sizer.Add((1,1))
+                self.sizer.Add(ctrl, 0, wx.EXPAND|wx.TOP, 0)
+
+    def update(self):
+        for mutebut in self.mutes:
+            mutebut.update()
+
+    def onMuteBut(self, mute, ind):
+        pass
+        mutebut = self.mutes[ind]
+
+    def onCtrl(self, val, ind):
+        pass
+
+
 class CtrlPageGUI(wx.Panel):
     def __init__(self, parent, interface, pagedef):
         wx.Panel.__init__(self, parent)
@@ -821,7 +953,10 @@ class CtrlPageGUI(wx.Panel):
                 self.sizer.Add(colsizer, 1, wx.LEFT, 4)
                 col += 1
                 cnt = 0
-            box = CtrlBoxGUI(self, interface, blockdef)
+            if blockdef.modetype==MODE_MUTE:
+                box = MuteBoxGUI(self, interface, blockdef)
+            else:
+                box = CtrlBoxGUI(self, interface, blockdef)
             if cnt>=1:
                 colsizer.Add(box, 0, wx.EXPAND|wx.TOP, 4)
             else:
@@ -926,7 +1061,8 @@ class CtrlDefDialog(wx.Dialog):
 
         label = wx.StaticText(self, label='Mode Type')
         self.modetype = wx.Choice(self, choices=['None', 'Standard',
-                                                 'OpenEnd','Except'])
+                                                 'OpenEnd','Except',
+                                                 'Mute'])
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(label, 0, wx.ALIGN_CENTER_VERTICAL|wx.RIGHT, 5)
         sizer.Add(self.modetype, 0)
