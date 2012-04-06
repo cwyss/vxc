@@ -548,6 +548,7 @@ class ProgInterface(object):
         self.midiint = MidiInterface(gui)
         self.listeners = {}
         self.prgchng_lst = []
+        self.prgmod_lst = []
         self.libchng_lst = []
         self.req = REQ_NONE
         self.bankreqlist = None
@@ -576,28 +577,36 @@ class ProgInterface(object):
     def addPrgChngListener(self, func):
         self.prgchng_lst.append(func)
 
+    def addPrgModListener(self, func):
+        self.prgmod_lst.append(func)
+
     def progChange(self, prog, location, sendmidi=False):
         self.current_orig = prog
         self.current = prog.copy()
         self.current_modi = None
         self.current_location = location
-        self.setProgModified(modified=False, sendmidi=sendmidi)
+        self.progChangeNotify(modified=False, sendmidi=sendmidi)
 
     def revertProg(self):
         if self.is_modified:
             self.current_modi = self.current
             self.current = self.current_orig.copy()
-            self.setProgModified(modified=False, sendmidi=True)
+            self.progChangeNotify(modified=False, sendmidi=True)
         elif self.current_modi:
             self.current = self.current_modi
-            self.setProgModified(modified=True, sendmidi=True)
+            self.progChangeNotify(modified=True, sendmidi=True)
 
-    def setProgModified(self, modified=True, sendmidi=False):
-        self.is_modified = modified
+    def progChangeNotify(self, modified, sendmidi):
         for func in self.prgchng_lst:
             func()
         if sendmidi and self.alwayssend and self.midiint.isOpen():
             self.midiint.sendsingleedit(self.current.dump)
+        self.setProgModified(modified)
+
+    def setProgModified(self, modified=True):
+        self.is_modified = modified
+        for func in self.prgmod_lst:
+            func()
 
     def isProgModified(self):
         return self.is_modified

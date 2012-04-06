@@ -504,7 +504,7 @@ class vxcFrame(wx.Frame):
         self.Bind(wx.EVT_CLOSE, self.onClose)
 
         self.interface = interface
-        interface.addPrgChngListener(self.onProgChange)
+        interface.addPrgModListener(self.showProgInfo)
         interface.addLibChngListener(self.onLibChange)
 
         self.limitdialog = LimitDialog(interface.proglib)
@@ -524,7 +524,7 @@ class vxcFrame(wx.Frame):
         self.limitdialog.Destroy()
         self.Destroy()
 
-    def onProgChange(self):
+    def showProgInfo(self):
         if self.interface.isProgModified()==True:
             line = '** '
         else:
