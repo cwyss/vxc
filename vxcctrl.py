@@ -871,25 +871,25 @@ class MuteButton(wx.BitmapButton):
             cval = self.interface.getCtrl(self.cid)
             if cval:
                 self.state = MB_MUTE
+                self.SetBitmapLabel(self.mutebitmaps.mutebmp)
                 self.cval = cval
                 self.interface.setCtrl(self.cid, 0)
-                self.SetBitmapLabel(self.mutebitmaps.mutebmp)
         elif self.state==MB_MUTE:
             self.interface.setCtrl(self.cid, self.cval)
             # note that setCtrl() triggers setState()
 
-    def setState(self, cval):
+    def setState(self, cval, forceunmute=False):
         if cval:
-            if self.state!=MB_ACTIVE:
-                self.state = MB_ACTIVE
-                self.SetBitmapLabel(self.mutebitmaps.activebmp)
-        elif self.state!=MB_MUTE:
+            self.state = MB_ACTIVE
+            self.SetBitmapLabel(self.mutebitmaps.activebmp)
+        elif self.state!=MB_MUTE or forceunmute:
             self.state = MB_INACTIVE
             self.SetBitmapLabel(self.mutebitmaps.inactivebmp)
 
     def update(self):
         cval = self.interface.getCtrl(self.cid)
-        self.setState(cval)
+        self.setState(cval, forceunmute=True)
+        self.ctrl.setVal(cval)
 
 
 class MuteBoxGUI(CtrlBoxBase):
