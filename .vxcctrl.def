@@ -3473,7 +3473,7 @@ p1013
 sbasg33
 (dp1014
 sbasg17
-V.Filter
+VFilter
 p1015
 sg53
 I2
@@ -5395,7 +5395,7 @@ p1512
 sbasg33
 (dp1513
 sbasg17
-V.LFO
+VLFO
 p1514
 sg53
 I3
@@ -11412,7 +11412,7 @@ p1889
 sbasg33
 (dp1890
 sbasg17
-V.Matrix
+VMatrix
 p1891
 sg53
 I3
@@ -12393,7 +12393,7 @@ I0
 V6E 8 0 0
 p2185
 ssbasg17
-V.FX1
+VFX1
 p2186
 sg53
 I1

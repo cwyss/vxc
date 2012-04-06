@@ -930,10 +930,7 @@ class MuteBoxGUI(CtrlBoxBase):
 
     def onMuteBut(self, mute, ind):
         pass
-        mutebut = self.mutes[ind]
 
-    def onCtrl(self, val, ind):
-        pass
 
 
 class CtrlPageGUI(wx.Panel):
