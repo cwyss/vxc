@@ -5,7 +5,8 @@
 """
 
 
-SINGLE_PROG_LEN = 512
+SINGLE_LEN = 512
+SINGLE_OLDLEN = 256
 
 SINGLE_NAME_START = 128+112
 SINGLE_NAME_LEN = 10
@@ -20,15 +21,19 @@ class SingleProgError(Exception):
 class SingleProg(object):
     def __init__(self, single=None):
         if type(single)==list:
-            if len(single)!=SINGLE_PROG_LEN:
+            if len(single)==SINGLE_LEN:
+                self.buf = single
+            elif len(single)==SINGLE_OLDLEN:
+                self.buf = single
+                self.buf.extend([0] * SINGLE_OLDLEN)
+            else:
                 raise SingleProgError
-            self.buf = single
             self.makeName()
         elif type(single)==SingleProg:
             self.buf = list(single.buf)
             self.makeName()
         elif single==None:
-            self.buf = [0] * SINGLE_PROG_LEN
+            self.buf = [0] * SINGLE_LEN
             self.name = '-Void-'
         else:
             raise TypeError('expected list or SingleProg object')
