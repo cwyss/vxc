@@ -1,3 +1,9 @@
 to build the python module pyrawmidi 
 
 $ python setup.py build
+
+to make it available to python
+
+$ ln -s build/lib.../pyrawmidi.so
+$ cd ..
+$ ln -s pyrawmidi/build/lib.../pyrawmidi.so
